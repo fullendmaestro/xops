@@ -1,0 +1,85 @@
+import subprocess
+import re
+import json
+import os
+import platform
+import glob
+
+# --- CONFIGURATION ---
+DRONE_NAMES = ["Drone1", "Drone2"]  # Match these to your Webots robot 'name' fields
+BASE_PORT = 9600
+
+# Resolve paths relative to this script
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TOOLS_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "tashi-tools"))
+
+# Target output (inside the controller folder)
+OUTPUT_FILE = os.path.join(SCRIPT_DIR, "..", "controllers", "tashi_drone", "swarm_config.json")
+# ---------------------
+
+def find_binary(name):
+    """Find binary in release or debug build"""
+    is_windows = platform.system() == "Windows"
+    ext = ".exe" if is_windows else ""
+
+    release = os.path.join(TOOLS_DIR, "target", "release", f"{name}{ext}")
+    debug = os.path.join(TOOLS_DIR, "target", "debug", f"{name}{ext}")
+
+    if os.path.exists(release):
+        return release, os.path.dirname(release)
+    elif os.path.exists(debug):
+        return debug, os.path.dirname(debug)
+    return None, None
+
+def find_lib_path(target_dir):
+    """Find library directory - prefer target/<profile>/lib"""
+    preferred = os.path.join(target_dir, "lib")
+    if os.path.isdir(preferred):
+        return preferred
+    lib_dirs = glob.glob(os.path.join(target_dir, "build", "**/lib"), recursive=True)
+    return lib_dirs[0] if lib_dirs else target_dir
+
+def generate_swarm_config():
+    print("--- TASHI SWARM CONFIG GENERATOR ---")
+
+    key_gen_path, target_dir = find_binary("key-generate")
+    if not key_gen_path:
+        print("ERROR: key-generate not found. Run ./setup.sh first!")
+        return
+
+    lib_path = find_lib_path(target_dir)
+    is_windows = platform.system() == "Windows"
+
+    # Set up environment
+    env = os.environ.copy()
+    if is_windows:
+        env["PATH"] = f"{lib_path};{env.get('PATH', '')}"
+    else:
+        env["LD_LIBRARY_PATH"] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
+
+    swarm_data = {}
+
+    for i, name in enumerate(DRONE_NAMES):
+        print(f"Generating keys for {name}...")
+        try:
+            res = subprocess.check_output([key_gen_path], env=env, text=True)
+            sec = re.search(r"Secret:\s+(\S+)", res).group(1)
+            pub = re.search(r"Public:\s+(\S+)", res).group(1)
+
+            swarm_data[name] = {
+                "port": BASE_PORT + i,
+                "secret": sec,
+                "public": pub
+            }
+        except Exception as e:
+            print(f"FAILED to generate keys for {name}: {e}")
+            return
+
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    with open(OUTPUT_FILE, "w") as f:
+        json.dump(swarm_data, f, indent=4)
+
+    print(f"\nSUCCESS: Config written to {OUTPUT_FILE}")
+
+if __name__ == "__main__":
+    generate_swarm_config()

@@ -1,0 +1,26 @@
+# Webots Tashi Swarm
+
+# Configuration (generated)
+swarm_config.json
+controllers/tashi_drone/swarm_config.json
+
+# Rust build artifacts
+tashi-tools/target/
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Webots Temporary Files
+*.wbt.bak
+*.wbt.lock
+controllers/*/tashi_drone.out
+controllers/*/tashi_drone.err
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,19 @@
+[package]
+name = "tashi-tools"
+version = "0.1.0"
+edition = "2021"
+description = "Tashi Vertex tools for Webots drone swarm simulation"
+
+[[bin]]
+name = "drone-comm"
+path = "src/bin/drone-comm.rs"
+
+[[bin]]
+name = "key-generate"
+path = "src/bin/key-generate.rs"
+
+[dependencies]
+tashi-vertex = { git = "https://github.com/tashigit/tashi-vertex-rs.git" }
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
