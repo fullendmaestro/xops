@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
     options.set_report_gossip_events(true);
     options.set_fallen_behind_kick_s(10);
 
-    let engine = Engine::start(&context, socket, options, &key, peers)?;
+    let engine = Engine::start(&context, socket, options, &key, peers, false)?;
 
     // Signal ready to Webots controller
     println!("DRONE_COMM_NODE_READY");

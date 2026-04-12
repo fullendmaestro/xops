@@ -6,6 +6,7 @@ import os
 import re
 import platform
 import glob as globmod
+import shlex
 
 class TashiNode:
     """Manages a single Tashi Vertex Node for a Webots Drone"""
@@ -16,13 +17,18 @@ class TashiNode:
         self.peer_list = peer_list
         self.is_running = False
         self.is_windows = platform.system() == "Windows"
+        self.wsl_distro = None
+        self.bin_path_wsl = None
+        self.use_wsl = False
 
         # Resolve paths from tashi-tools directory
         abs_tools = os.path.abspath(tools_dir)
-        self.use_wsl = False
+        tools_wsl_path = self._unc_to_wsl_path(abs_tools)
+        if self.is_windows and tools_wsl_path:
+            self.use_wsl = True
 
         # Try release build first, then debug
-        if self.is_windows:
+        if self.is_windows and not self.use_wsl:
             release_bin = os.path.join(abs_tools, "target", "release", "drone-comm.exe")
             debug_bin = os.path.join(abs_tools, "target", "debug", "drone-comm.exe")
         else:
@@ -32,9 +38,13 @@ class TashiNode:
         if os.path.exists(release_bin):
             self.bin_path = release_bin
             target_dir = os.path.join(abs_tools, "target", "release")
+            if self.use_wsl:
+                self.bin_path_wsl = f"{tools_wsl_path}/target/release/drone-comm"
         elif os.path.exists(debug_bin):
             self.bin_path = debug_bin
             target_dir = os.path.join(abs_tools, "target", "debug")
+            if self.use_wsl:
+                self.bin_path_wsl = f"{tools_wsl_path}/target/debug/drone-comm"
         else:
             raise FileNotFoundError(f"drone-comm binary not found. Run ./setup.sh first.")
 
@@ -50,19 +60,54 @@ class TashiNode:
         self.on_message_callback = None
         self.on_ready_callback = None
 
+    @staticmethod
+    def _split_wsl_unc(path):
+        """Parse UNC WSL paths like \\\\wsl.localhost\\Ubuntu\\home\\user into (distro, /home/user)."""
+        norm = path.replace("/", "\\")
+        for prefix in ("\\\\wsl.localhost\\", "\\\\wsl$\\"):
+            if norm.startswith(prefix):
+                rest = norm[len(prefix):]
+                parts = [p for p in rest.split("\\") if p]
+                if len(parts) >= 2:
+                    distro = parts[0]
+                    linux_path = "/" + "/".join(parts[1:])
+                    return distro, linux_path
+        return None, None
+
+    def _unc_to_wsl_path(self, path):
+        distro, linux_path = self._split_wsl_unc(path)
+        if distro and linux_path:
+            self.wsl_distro = self.wsl_distro or distro
+            if self.wsl_distro == distro:
+                return linux_path
+        return None
+
     def start(self):
         peer_args = " ".join([f"-P {p}" for p in self.peer_list])
 
         # Set library path for dynamic linking
         env = os.environ.copy()
-        if self.is_windows:
+        if self.use_wsl:
+            lib_wsl = self._unc_to_wsl_path(self.lib_path)
+            if not lib_wsl:
+                raise RuntimeError(f"Failed to map library path to WSL: {self.lib_path}")
+
+            cmd_str = (
+                f"export LD_LIBRARY_PATH={shlex.quote(lib_wsl)}:$LD_LIBRARY_PATH; "
+                f"exec {shlex.quote(self.bin_path_wsl)} -B {shlex.quote(self.bind_addr)} "
+                f"-K {shlex.quote(self.secret_key)} {peer_args}"
+            )
+            cmd = ["wsl", "-d", self.wsl_distro, "bash", "-lc", cmd_str]
+        elif self.is_windows:
             env["PATH"] = f"{self.lib_path};{env.get('PATH', '')}"
+            cmd = [self.bin_path, "-B", self.bind_addr, "-K", self.secret_key]
+            for p in self.peer_list:
+                cmd.extend(["-P", p])
         else:
             env["LD_LIBRARY_PATH"] = f"{self.lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
-
-        cmd = [self.bin_path, "-B", self.bind_addr, "-K", self.secret_key]
-        for p in self.peer_list:
-            cmd.extend(["-P", p])
+            cmd = [self.bin_path, "-B", self.bind_addr, "-K", self.secret_key]
+            for p in self.peer_list:
+                cmd.extend(["-P", p])
 
         self.process = subprocess.Popen(cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         self.is_running = True
