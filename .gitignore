@@ -25,3 +25,7 @@ controllers/*/tashi_drone.err
 # OS
 .DS_Store
 Thumbs.db
+
+
+# Others
+templates/
