@@ -1,166 +1,218 @@
-#VRML_SIM R2025a utf8
-
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/dji/mavic/protos/Mavic2Pro.proto"
-
-WorldInfo {
-}
-Viewpoint {
-  orientation 0.1305957788829366 0.02889092384383546 -0.991014660364522 2.7099276034127624
-  position 2.5 0.0 1.5
-  follow "Mavic"
-  followSmoothness 0.2
-}
-TexturedBackground {
-}
-RectangleArena {
-  floorSize 10 10
-}
-Solid {
-  translation 0 1.5 0.1
-  children [
-    Connector {
-      translation 0 0 0.1
-      rotation 0 1 0 0
-      name "box_connector"
-      type "passive"
-    }
-    DEF BACK Pose {
-      translation -0.09975 0 0
-      children [
-        Shape {
-          appearance PBRAppearance {
-            baseColorMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_back_base_color.jpg"
-              ]
-            }
-            roughness 0.7
-            metalness 0
-          }
-          geometry Box {
-            size 0.0005 0.1999 0.1999
-          }
-        }
-      ]
-    }
-    DEF FRONT Pose {
-      translation 0.09975 0 0
-      children [
-        Shape {
-          appearance PBRAppearance {
-            baseColorMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_front_base_color.jpg"
-              ]
-            }
-            roughness 0.7
-            metalness 0
-          }
-          geometry Box {
-            size 0.0005 0.1999 0.1999
-          }
-        }
-      ]
-    }
-    DEF RIGHT Pose {
-      translation 0 -0.09975 0
-      children [
-        Shape {
-          appearance PBRAppearance {
-            baseColorMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_right_base_color.jpg"
-              ]
-            }
-            roughness 0.7
-            metalness 0
-          }
-          geometry Box {
-            size 0.1999 0.0005 0.1999
-          }
-        }
-      ]
-    }
-    DEF LEFT Pose {
-      translation 0 0.09975 0
-      children [
-        Shape {
-          appearance PBRAppearance {
-            baseColorMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_left_base_color.jpg"
-              ]
-            }
-            roughness 0.7
-            metalness 0
-          }
-          geometry Box {
-            size 0.1999 0.0005 0.1999
-          }
-        }
-      ]
-    }
-    DEF BOTTOM Pose {
-      translation 0 0 -0.09975
-      children [
-        Shape {
-          appearance PBRAppearance {
-            baseColorMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_bottom_base_color.jpg"
-              ]
-            }
-            roughness 0.7
-            metalness 0
-          }
-          geometry Box {
-            size 0.1999 0.1999 0.0005
-          }
-        }
-      ]
-    }
-    DEF TOP Pose {
-      translation 0 0 0.09975
-      children [
-        Shape {
-          appearance PBRAppearance {
-            baseColorMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_top_base_color.jpg"
-              ]
-            }
-            roughness 0.7
-            metalness 0
-          }
-          geometry Box {
-            size 0.1999 0.1999 0.0005
-          }
-        }
-      ]
-    }
-  ]
-  name "cardboard box"
-  model "cardboard box"
-  boundingObject Box {
-    size 0.2 0.2 0.2
-  }
-  physics Physics {
-    density -1
-    mass 0.1
-  }
-}
-Mavic2Pro {
-  translation 0 0 0.065
-  name "Mavic"
-  controller "mavic_drone"
-  bodySlot [
-    Connector {
-      translation 0 0 -0.05
-      rotation 0 1 0 3.14159
-      name "gripper_connector"
-      type "active"
-    }
-  ]
+#VRML_SIM R2025a utf8  
+  
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"  
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"  
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/dji/mavic/protos/Mavic2Pro.proto"  
+  
+WorldInfo {  
+  title "Drone Delivery Simulation"  
+  basicTimeStep 8  
+}  
+Viewpoint {  
+  orientation 0.1305957788829366 0.02889092384383546 -0.991014660364522 2.7099276034127624  
+  position 2.5 0.0 1.5  
+  follow "Mavic"  
+  followSmoothness 0.2  
+}  
+TexturedBackground {  
+}  
+RectangleArena {  
+  floorSize 10 10  
+}  
+Solid {  
+  translation 0 1.5 0.1  
+  children [  
+    HingeJoint {  
+      jointParameters HingeJointParameters {  
+        axis 0 0 1  
+        anchor 0 0 0.1  
+      }  
+      device [  
+        RotationalMotor {  
+          name "box_handle_motor"  
+          maxTorque 0.1  
+        }  
+        PositionSensor {  
+          name "box_handle_sensor"  
+        }  
+      ]  
+      endPoint Solid {  
+        translation 0 0 0  
+        children [  
+          Connector {  
+            translation 0 0 0  
+            rotation 0 1 0 0  
+            name "box_connector"  
+            type "passive"  
+            model "delivery_gripper"  
+            distanceTolerance 0.03  
+            axisTolerance 0.3  
+            numberOfRotations 0  
+            snap TRUE  
+          }  
+          Shape {  
+            appearance PBRAppearance {  
+              baseColor 0.8 0.2 0.2  
+              roughness 0.5  
+              metalness 0  
+            }  
+            geometry Cylinder {  
+              height 0.05  
+              radius 0.02  
+            }  
+          }  
+        ]  
+        name "box_handle"  
+        boundingObject Cylinder {  
+          height 0.05  
+          radius 0.02  
+        }  
+        physics Physics {  
+          density -1  
+          mass 0.01  
+        }  
+      }  
+    }  
+    DEF BACK Pose {  
+      translation -0.09975 0 0  
+      children [  
+        Shape {  
+          appearance PBRAppearance {  
+            baseColorMap ImageTexture {  
+              url [  
+                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_back_base_color.jpg"  
+              ]  
+            }  
+            roughness 0.7  
+            metalness 0  
+          }  
+          geometry Box {  
+            size 0.0005 0.1999 0.1999  
+          }  
+        }  
+      ]  
+    }  
+    DEF FRONT Pose {  
+      translation 0.09975 0 0  
+      children [  
+        Shape {  
+          appearance PBRAppearance {  
+            baseColorMap ImageTexture {  
+              url [  
+                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_front_base_color.jpg"  
+              ]  
+            }  
+            roughness 0.7  
+            metalness 0  
+          }  
+          geometry Box {  
+            size 0.0005 0.1999 0.1999  
+          }  
+        }  
+      ]  
+    }  
+    DEF RIGHT Pose {  
+      translation 0 -0.09975 0  
+      children [  
+        Shape {  
+          appearance PBRAppearance {  
+            baseColorMap ImageTexture {  
+              url [  
+                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_right_base_color.jpg"  
+              ]  
+            }  
+            roughness 0.7  
+            metalness 0  
+          }  
+          geometry Box {  
+            size 0.1999 0.0005 0.1999  
+          }  
+        }  
+      ]  
+    }  
+    DEF LEFT Pose {  
+      translation 0 0.09975 0  
+      children [  
+        Shape {  
+          appearance PBRAppearance {  
+            baseColorMap ImageTexture {  
+              url [  
+                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_left_base_color.jpg"  
+              ]  
+            }  
+            roughness 0.7  
+            metalness 0  
+          }  
+          geometry Box {  
+            size 0.1999 0.0005 0.1999  
+          }  
+        }  
+      ]  
+    }  
+    DEF BOTTOM Pose {  
+      translation 0 0 -0.09975  
+      children [  
+        Shape {  
+          appearance PBRAppearance {  
+            baseColorMap ImageTexture {  
+              url [  
+                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_bottom_base_color.jpg"  
+              ]  
+            }  
+            roughness 0.7  
+            metalness 0  
+          }  
+          geometry Box {  
+            size 0.1999 0.1999 0.0005  
+          }  
+        }  
+      ]  
+    }  
+    DEF TOP Pose {  
+      translation 0 0 0.09975  
+      children [  
+        Shape {  
+          appearance PBRAppearance {  
+            baseColorMap ImageTexture {  
+              url [  
+                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_top_base_color.jpg"  
+              ]  
+            }  
+            roughness 0.7  
+            metalness 0  
+          }  
+          geometry Box {  
+            size 0.1999 0.1999 0.0005  
+          }  
+        }  
+      ]  
+    }  
+  ]  
+  name "cardboard box"  
+  model "cardboard box"  
+  boundingObject Box {  
+    size 0.2 0.2 0.2  
+  }  
+  physics Physics {  
+    density -1  
+    mass 0.1  
+  }  
+}  
+Mavic2Pro {  
+  translation 0 0 0.065  
+  name "Mavic"  
+  controller "mavic_drone"  
+  bodySlot [  
+    Connector {  
+      translation 0 0 -0.05  
+      rotation 0 1 0 0  
+      name "gripper_connector"  
+      type "active"  
+      model "delivery_gripper"  
+      distanceTolerance 0.03  
+      axisTolerance 0.3  
+      numberOfRotations 0  
+      snap TRUE  
+    }  
+  ]  
 }

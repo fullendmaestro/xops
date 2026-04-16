@@ -23,7 +23,8 @@ class MavicAutonomous:
         self.camera_roll_motor = self.robot.getDevice("camera roll")
         self.camera_pitch_motor = self.robot.getDevice("camera pitch")
         self.gripper = self.robot.getDevice("gripper_connector")
-        if self.gripper: self.gripper.enablePresence(self.timestep)
+        if self.gripper:  
+            self.gripper.enablePresence(self.timestep)  
 
         # Motors
         self.front_left_motor = self.robot.getDevice("front left propeller")
@@ -108,14 +109,34 @@ class MavicAutonomous:
                     print("⬇️ Descending to grab...")
                     self.state = "DESCEND"
 
-            elif self.state == "DESCEND":
-                self.target_altitude = max(self.box_pos[2], self.target_altitude - 0.001)
-                if self.gripper and self.gripper.getPresence() == 1:
-                    self.gripper.lock()
-                    print("📦 Box Locked! Lifting...")
-                    self.target_altitude = self.cruise_alt
+            elif self.state == "DESCEND":  
+                self.target_altitude = max(self.box_pos[2], self.target_altitude - 0.001)  
+                if self.gripper and self.gripper.getPresence() == 1:  
+                    self.gripper.lock()  
+                    print("📦 Box Locked! Stabilizing...")  
+                    self.timer = 50  # Add stabilization delay  
+                    self.state = "STABILIZE_AFTER_LOCK" 
+
+            elif self.state == "STABILIZE_AFTER_LOCK":  
+                self.timer -= 1  
+                if self.timer <= 0:  
+                    print("✅ Stable. Lifting...")  
+                    self.target_altitude = self.cruise_alt  
                     self.state = "LIFT"
 
+            elif self.state == "DESCEND":  
+                self.target_altitude = max(self.box_pos[2], self.target_altitude - 0.001)  
+                if self.gripper:  
+                    presence = self.gripper.getPresence()  
+                    # Only lock if we're close enough and stable  
+                    if presence == 1 and dist_to_target < 0.1:  
+                        self.gripper.lock()  
+                        print("📦 Box Locked! Lifting...")  
+                        self.target_altitude = self.cruise_alt  
+                        self.state = "LIFT"
+
+
+            
             elif self.state == "LIFT":
                 if altitude > self.cruise_alt - 0.05:
                     print("✅ Lifted safely. Sliding to drop zone...")
