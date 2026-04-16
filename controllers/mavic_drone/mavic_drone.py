@@ -1,102 +1,193 @@
-from controller import Robot, Keyboard
 import math
+from controller import Robot
 
-def clamp(value, low, high):
-    return max(low, min(value, high))
+def CLAMP(value, low, high):
+    return low if value < low else (high if value > high else value)
 
 class MavicAutonomous:
     def __init__(self):
         self.robot = Robot()
         self.timestep = int(self.robot.getBasicTimeStep())
 
-        # 1. Initialize Devices
+        # Devices
+        self.camera = self.robot.getDevice("camera")
+        if self.camera: self.camera.enable(self.timestep)
+        self.front_left_led = self.robot.getDevice("front left led")
+        self.front_right_led = self.robot.getDevice("front right led")
         self.imu = self.robot.getDevice("inertial unit")
         self.imu.enable(self.timestep)
         self.gps = self.robot.getDevice("gps")
         self.gps.enable(self.timestep)
         self.gyro = self.robot.getDevice("gyro")
         self.gyro.enable(self.timestep)
+        self.camera_roll_motor = self.robot.getDevice("camera roll")
+        self.camera_pitch_motor = self.robot.getDevice("camera pitch")
         self.gripper = self.robot.getDevice("gripper_connector")
-        self.gripper.enablePresence(self.timestep)
+        if self.gripper: self.gripper.enablePresence(self.timestep)
 
-        # 2. Initialize Motors (Velocity Mode)
-        self.m = {}
-        names = ["front left", "front right", "rear left", "rear right"]
-        for name in names:
-            dev = self.robot.getDevice(name + " propeller")
-            dev.setPosition(float('inf'))
-            dev.setVelocity(1.0)
-            self.m[name] = dev
+        # Motors
+        self.front_left_motor = self.robot.getDevice("front left propeller")
+        self.front_right_motor = self.robot.getDevice("front right propeller")
+        self.rear_left_motor = self.robot.getDevice("rear left propeller")
+        self.rear_right_motor = self.robot.getDevice("rear right propeller")
+        
+        self.motors = [self.front_left_motor, self.front_right_motor, self.rear_left_motor, self.rear_right_motor]
+        for m in self.motors:
+            m.setPosition(float('inf'))
+            m.setVelocity(1.0)
 
-        # 3. Constants (From the C code you provided)
+        # Exact Webots PID Constants
         self.k_vertical_thrust = 68.5
         self.k_vertical_offset = 0.6
         self.k_vertical_p = 3.0
         self.k_roll_p = 50.0
         self.k_pitch_p = 30.0
+
+        # MISSION WAYPOINTS
+        self.box_pos = [0.0, 1.5, 0.26]    # Box is exactly to the Left
+        self.drop_pos = [0.0, -1.5, 0.35]  # Drop is exactly to the Right
+        self.cruise_alt = 1.0
         
-        # Mission Variables
-        self.target_altitude = 1.0
-        self.target_y = 2.0 # The Y coordinate of your box
         self.state = "TAKEOFF"
+        self.target_altitude = self.cruise_alt
+        self.target_x = 0.0
+        self.target_y = 0.0
+        
+        self.timer = 0
+        self.step_counter = 0
 
     def run(self):
-        print("Drone starting... Aiming for Box at Y=2.0")
-        
+        print("🚀 Robust Navigation Mission Started")
+
         while self.robot.step(self.timestep) != -1:
+            time = self.robot.getTime()
+            self.step_counter += 1
+
             # Read Sensors
-            roll = self.imu.getRollPitchYaw()[0]
-            pitch = self.imu.getRollPitchYaw()[1]
-            altitude = self.gps.getValues()[2]
-            roll_velocity = self.gyro.getValues()[0]
-            pitch_velocity = self.gyro.getValues()[1]
-            current_y = self.gps.getValues()[1]
+            roll, pitch, yaw = self.imu.getRollPitchYaw()
+            pos = self.gps.getValues()
+            if math.isnan(pos[0]): continue
+            current_x, current_y, altitude = pos[0], pos[1], pos[2]
+            roll_vel, pitch_vel, _ = self.gyro.getValues()
 
-            if math.isnan(altitude): continue
+            # Hardware Stabilizers
+            if self.front_left_led:
+                led_state = int(time) % 2
+                self.front_left_led.set(led_state)
+                self.front_right_led.set(not led_state)
+            if self.camera_roll_motor:
+                self.camera_roll_motor.setPosition(-0.115 * roll_vel)
+                self.camera_pitch_motor.setPosition(-0.1 * pitch_vel)
 
-            # --- Autonomous State Machine ---
-            pitch_disturbance = 0.0
-            
+            # === GLOBAL ERROR CALCULATION ===
+            dx = self.target_x - current_x
+            dy = self.target_y - current_y
+            dist_to_target = math.hypot(dx, dy)
+
+            if self.step_counter % 32 == 0:
+                print(f"[{self.state}] Dist: {dist_to_target:.2f}m | Alt: {altitude:.2f}m")
+
+            # === MISSION STATE MACHINE ===
             if self.state == "TAKEOFF":
-                if altitude > 0.8: self.state = "NAVIGATE"
-            
-            elif self.state == "NAVIGATE":
-                # Move toward box (Y=2.0)
-                dist_y = self.target_y - current_y
-                pitch_disturbance = clamp(dist_y * -2.0, -2.0, 2.0)
-                if abs(dist_y) < 0.05: self.state = "DESCEND"
-            
+                self.target_x, self.target_y = 0.0, 0.0
+                self.target_altitude = self.cruise_alt
+                if altitude > self.cruise_alt - 0.05:
+                    print("✅ Takeoff complete. Sliding to box...")
+                    self.state = "FLY_TO_BOX"
+
+            elif self.state == "FLY_TO_BOX":
+                self.target_x, self.target_y = self.box_pos[0], self.box_pos[1]
+                if dist_to_target < 0.05:
+                    print("🛑 Arrived at box. Braking...")
+                    self.timer = 150 
+                    self.state = "STABILIZE_BOX"
+
+            elif self.state == "STABILIZE_BOX":
+                self.timer -= 1
+                if self.timer <= 0:
+                    print("⬇️ Descending to grab...")
+                    self.state = "DESCEND"
+
             elif self.state == "DESCEND":
-                self.target_altitude = 0.25 # Lower to box
-                if self.gripper.getPresence() == 1:
+                self.target_altitude = max(self.box_pos[2], self.target_altitude - 0.001)
+                if self.gripper and self.gripper.getPresence() == 1:
                     self.gripper.lock()
-                    print("📦 BOX SECURED!")
+                    print("📦 Box Locked! Lifting...")
+                    self.target_altitude = self.cruise_alt
                     self.state = "LIFT"
-            
+
             elif self.state == "LIFT":
-                self.target_altitude = 1.5
+                if altitude > self.cruise_alt - 0.05:
+                    print("✅ Lifted safely. Sliding to drop zone...")
+                    self.state = "FLY_TO_DROP"
 
-            # --- PID Logic (Mirroring your C code) ---
-            roll_input = self.k_roll_p * clamp(roll, -1.0, 1.0) + roll_velocity
-            pitch_input = self.k_pitch_p * clamp(pitch, -1.0, 1.0) + pitch_velocity + pitch_disturbance
+            elif self.state == "FLY_TO_DROP":
+                self.target_x, self.target_y = self.drop_pos[0], self.drop_pos[1]
+                if dist_to_target < 0.05:
+                    print("🛑 Arrived at drop zone. Braking...")
+                    self.timer = 150
+                    self.state = "STABILIZE_DROP"
+
+            elif self.state == "STABILIZE_DROP":
+                self.timer -= 1
+                if self.timer <= 0:
+                    print("⬇️ Descending to drop...")
+                    self.state = "DROP_DESCEND"
+
+            elif self.state == "DROP_DESCEND":
+                self.target_altitude = max(self.drop_pos[2], self.target_altitude - 0.001)
+                if altitude < self.drop_pos[2] + 0.05:
+                    if self.gripper: self.gripper.unlock()
+                    print("🏁 Box Dropped! Returning to hover...")
+                    self.target_altitude = self.cruise_alt
+                    self.state = "FINISH"
+                    
+            elif self.state == "FINISH":
+                self.target_x, self.target_y = self.drop_pos[0], self.drop_pos[1]
+                self.target_altitude = self.cruise_alt
+
+            # === NAVIGATION KINEMATICS (The Fix) ===
+            pitch_disturbance = 0.0
+            roll_disturbance = 0.0
             
-            diff_alt = clamp(self.target_altitude - altitude + self.k_vertical_offset, -1.0, 1.0)
-            vertical_input = self.k_vertical_p * pow(diff_alt, 3.0)
+            # Force drone to permanently face Forward (Yaw = 0)
+            yaw_disturbance = CLAMP(-yaw * 1.5, -0.5, 0.5) 
 
-            # Extra lift if holding the box
-            box_bonus = 5.0 if self.gripper.isLocked() else 0.0
+            # Only translate if we are in a flying state
+            if dist_to_target > 0.05 and self.state in ["FLY_TO_BOX", "FLY_TO_DROP"]:
+                
+                # 1. Rotate the global error into the drone's local physical frame
+                local_x = dx * math.cos(yaw) + dy * math.sin(yaw)
+                local_y = -dx * math.sin(yaw) + dy * math.cos(yaw)
+                
+                # 2. Increased power authority (0.5) gives the drone brakes to stop drifting!
+                p_gain = 0.5
+                max_thrust = 0.5
+                
+                # 3. Corrected physical motor mapping
+                pitch_disturbance = CLAMP(-local_x * p_gain, -max_thrust, max_thrust)
+                roll_disturbance = CLAMP(local_y * p_gain, -max_thrust, max_thrust)
 
-            # --- Motor Mixing (Note the +/- signs matching the C code) ---
-            fl = self.k_vertical_thrust + vertical_input - roll_input + pitch_input + box_bonus
-            fr = self.k_vertical_thrust + vertical_input + roll_input + pitch_input + box_bonus
-            rl = self.k_vertical_thrust + vertical_input - roll_input - pitch_input + box_bonus
-            rr = self.k_vertical_thrust + vertical_input + roll_input - pitch_input + box_bonus
+            # === ATTITUDE CONTROLLER (Inner Loop) ===
+            roll_input = self.k_roll_p * CLAMP(roll, -1.0, 1.0) + roll_vel + roll_disturbance
+            pitch_input = self.k_pitch_p * CLAMP(pitch, -1.0, 1.0) + pitch_vel + pitch_disturbance
+            
+            clamped_alt_diff = CLAMP(self.target_altitude - altitude + self.k_vertical_offset, -1.0, 1.0)
+            vertical_input = self.k_vertical_p * (clamped_alt_diff ** 3.0)
 
-            # IMPORTANT: Invert the signs for FR and RL to account for propeller direction
-            self.m["front left"].setVelocity(fl)
-            self.m["front right"].setVelocity(-fr) # Inverted
-            self.m["rear left"].setVelocity(-rl)  # Inverted
-            self.m["rear right"].setVelocity(rr)
+            weight_comp = 7.0 if (self.gripper and self.gripper.isLocked()) else 0.0
+            base_thrust = self.k_vertical_thrust + weight_comp
 
-if __name__ == "__main__":
+            # Apply final motor assignments
+            fl = base_thrust + vertical_input - roll_input + pitch_input - yaw_disturbance
+            fr = base_thrust + vertical_input + roll_input + pitch_input + yaw_disturbance
+            rl = base_thrust + vertical_input - roll_input - pitch_input + yaw_disturbance
+            rr = base_thrust + vertical_input + roll_input - pitch_input - yaw_disturbance
+            
+            self.front_left_motor.setVelocity(fl)
+            self.front_right_motor.setVelocity(-fr)
+            self.rear_left_motor.setVelocity(-rl)
+            self.rear_right_motor.setVelocity(rr)
+
+if __name__ == '__main__':
     MavicAutonomous().run()

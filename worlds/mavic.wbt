@@ -8,9 +8,9 @@ WorldInfo {
 }
 Viewpoint {
   orientation 0.1305957788829366 0.02889092384383546 -0.991014660364522 2.7099276034127624
-  position 0.20539587004226423 0.3080590726381094 0.36008296829686337
-  follow "rectangle arena"
-  followType "Mounted Shot"
+  position 2.5 0.0 1.5
+  follow "Mavic"
+  followSmoothness 0.2
 }
 TexturedBackground {
 }
@@ -18,12 +18,11 @@ RectangleArena {
   floorSize 10 10
 }
 Solid {
-  translation 3.592875486016586e-17 2 0.09996076000000004
-  rotation -0.6929924491775471 -0.3695959728946898 -0.6189994201959583 5.7674551770283e-17
+  translation 0 1.5 0.1
   children [
     Connector {
       translation 0 0 0.1
-      rotation 1 0 0 1.57
+      rotation 0 1 0 0
       name "box_connector"
       type "passive"
     }
@@ -38,25 +37,10 @@ Solid {
               ]
             }
             roughness 0.7
-            roughnessMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_back_roughness.jpg"
-              ]
-            }
             metalness 0
-            normalMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_back_normal.jpg"
-              ]
-            }
-            occlusionMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_back_occlusion.jpg"
-              ]
-            }
           }
           geometry Box {
-            size 0.0005 0.19990000000000002 0.19990000000000002
+            size 0.0005 0.1999 0.1999
           }
         }
       ]
@@ -72,25 +56,10 @@ Solid {
               ]
             }
             roughness 0.7
-            roughnessMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_front_roughness.jpg"
-              ]
-            }
             metalness 0
-            normalMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_front_normal.jpg"
-              ]
-            }
-            occlusionMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_front_occlusion.jpg"
-              ]
-            }
           }
           geometry Box {
-            size 0.0005 0.19990000000000002 0.19990000000000002
+            size 0.0005 0.1999 0.1999
           }
         }
       ]
@@ -106,25 +75,10 @@ Solid {
               ]
             }
             roughness 0.7
-            roughnessMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_right_roughness.jpg"
-              ]
-            }
             metalness 0
-            normalMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_right_normal.jpg"
-              ]
-            }
-            occlusionMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_right_occlusion.jpg"
-              ]
-            }
           }
           geometry Box {
-            size 0.19990000000000002 0.0005 0.19990000000000002
+            size 0.1999 0.0005 0.1999
           }
         }
       ]
@@ -140,25 +94,10 @@ Solid {
               ]
             }
             roughness 0.7
-            roughnessMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_left_roughness.jpg"
-              ]
-            }
             metalness 0
-            normalMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_left_normal.jpg"
-              ]
-            }
-            occlusionMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_left_occlusion.jpg"
-              ]
-            }
           }
           geometry Box {
-            size 0.19990000000000002 0.0005 0.19990000000000002
+            size 0.1999 0.0005 0.1999
           }
         }
       ]
@@ -174,32 +113,16 @@ Solid {
               ]
             }
             roughness 0.7
-            roughnessMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_bottom_roughness.jpg"
-              ]
-            }
             metalness 0
-            normalMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_bottom_normal.jpg"
-              ]
-            }
-            occlusionMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_bottom_occlusion.jpg"
-              ]
-            }
           }
           geometry Box {
-            size 0.19990000000000002 0.19990000000000002 0.0005
+            size 0.1999 0.1999 0.0005
           }
         }
       ]
     }
     DEF TOP Pose {
       translation 0 0 0.09975
-      rotation 0 1 0 0
       children [
         Shape {
           appearance PBRAppearance {
@@ -209,25 +132,10 @@ Solid {
               ]
             }
             roughness 0.7
-            roughnessMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_top_roughness.jpg"
-              ]
-            }
             metalness 0
-            normalMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_top_normal.jpg"
-              ]
-            }
-            occlusionMap ImageTexture {
-              url [
-                "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/textures/cardboard/cardboard_top_occlusion.jpg"
-              ]
-            }
           }
           geometry Box {
-            size 0.19990000000000002 0.19990000000000002 0.0005
+            size 0.1999 0.1999 0.0005
           }
         }
       ]
@@ -242,31 +150,15 @@ Solid {
     density -1
     mass 0.1
   }
-  linearVelocity 1.5193654499080334e-17 5.215777537195778e-19 -1.421085471520215e-16
-  angularVelocity 2.465190328815662e-31 3.3306690738754696e-16 -4.587648713102001e-18
 }
 Mavic2Pro {
-  hidden position_0_0 1.6884820586636203e-08
-  hidden linearVelocity_0 3.560442794026192e-07 -3.991815715539294e-07 -3.4113034538800873e-14
-  hidden angularVelocity_0 1.0617816696973628e-12 -1.0327437389259867e-12 -1.1381604900289563e-05
-  hidden position_6_0 5.0025233591142024e-05
-  hidden linearVelocity_6 -5.245874746207468e-07 7.205275851305045e-07 1.1794209252879193e-11
-  hidden angularVelocity_6 2.9378407234895373e-09 2.6355624800277033e-09 -1.1325406070056873e-05
-  hidden rotation_7 0 1 0 5.0025237731071173e-05
-  hidden position_7_0 -0.00011889533919513709
-  hidden linearVelocity_7 -5.599105844365913e-07 6.660760584711835e-07 2.842290967151171e-10
-  hidden angularVelocity_7 7.807906672769704e-08 -8.161850631455108e-08 -1.1325379913577437e-05
-  hidden rotation_8 -0.9999999999999999 0 0 0.00011889534082902271
-  hidden linearVelocity_8 -6.403555155601339e-07 6.169856619219481e-07 8.387258188603052e-11
-  hidden angularVelocity_8 1.1379144568417805e-07 -4.9769772019697435e-08 -1.1328737926130442e-05
-  translation -0.9101101109701275 -0.23148524885347946 0.06557266897702255
-  rotation 0.03500139563805613 0.013473063171629385 0.9992964419391082 -2.4137806090931524
+  translation 0 0 0.065
   name "Mavic"
   controller "mavic_drone"
   bodySlot [
     Connector {
-      translation 0 0 -0.02
-      rotation 1 0 0 -1.57
+      translation 0 0 -0.05
+      rotation 0 1 0 3.14159
       name "gripper_connector"
       type "active"
     }
