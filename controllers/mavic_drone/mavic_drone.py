@@ -45,9 +45,10 @@ class MavicAutonomous:
         self.k_pitch_p = 30.0  
   
         # MISSION WAYPOINTS  
-        self.box_pos = [0.0, 1.5, 0.1]    # Box position (MyBot location)  
-        self.drop_pos = [0.0, -1.5, 0.5]  # Drop location at cruise altitude  
+        self.box_pos = [0.0, 3.5, 0.1]    # Box position (Cardboard box location)  
+        self.drop_pos = [2.5, -2.5, 0.3]  # Drop location - different from initial pickup  
         self.cruise_alt = 1.0  
+        self.climb_alt = 1.5  # Higher altitude for horizontal movement  
           
         self.state = "TAKEOFF"  
         self.target_altitude = self.cruise_alt  
@@ -130,34 +131,34 @@ class MavicAutonomous:
                     self.state = "LIFT"  
               
             elif self.state == "LIFT":  
-                if altitude > self.cruise_alt - 0.05:  
-                    print("✅ Lifted safely. Sliding to drop zone...")  
-                    self.state = "FLY_TO_DROP"  
+                if altitude > self.climb_alt - 0.05:  
+                    print("⬆️ Climbing to high altitude...")  
+                    self.target_altitude = self.climb_alt  
+                    self.state = "FLY_HORIZONTAL"  
   
-            elif self.state == "FLY_TO_DROP":  
+            elif self.state == "FLY_HORIZONTAL":  
                 self.target_x, self.target_y = self.drop_pos[0], self.drop_pos[1]  
-                if dist_to_target < 0.1:  
-                    print("🛑 Arrived at drop zone. Positioning...")  
-                    self.timer = 150  
-                    self.state = "STABILIZE_DROP"  
+                if dist_to_target < 0.3:  
+                    print("↗️ Reached horizontal destination. Climbing more...")  
+                    self.state = "FLY_VERTICAL_UP_MORE"  
   
-            elif self.state == "STABILIZE_DROP":  
-                self.timer -= 1  
-                if self.timer <= 0:  
-                    print("⬇️ Descending to drop...")  
+            elif self.state == "FLY_VERTICAL_UP_MORE":  
+                self.target_altitude = self.climb_alt + 0.3  
+                if altitude > self.climb_alt + 0.25:  
+                    print("⬇️ At peak altitude. Descending to drop zone...")  
                     self.state = "DROP_DESCEND"  
   
             elif self.state == "DROP_DESCEND":  
-                self.target_altitude = max(self.drop_pos[2] - 0.3, self.target_altitude - 0.002)  
-                if altitude < self.drop_pos[2] - 0.25:  
+                self.target_x, self.target_y = self.drop_pos[0], self.drop_pos[1]  
+                self.target_altitude = max(self.drop_pos[2], self.target_altitude - 0.003)  
+                if altitude < self.drop_pos[2] + 0.1:  
                     if self.gripper and self.gripper.isLocked():  
                         self.gripper.unlock()  
-                        print("🏁 Box Dropped! Returning to hover...")  
-                    self.target_altitude = self.cruise_alt  
-                    self.state = "FINISH"  
+                        print("🏁 Box Dropped at new location! Returning home...")  
+                    self.state = "RETURN_HOME"  
                       
-            elif self.state == "FINISH":  
-                self.target_x, self.target_y = self.drop_pos[0], self.drop_pos[1]  
+            elif self.state == "RETURN_HOME":  
+                self.target_x, self.target_y = 0.0, 0.0  
                 self.target_altitude = self.cruise_alt  
   
             # === NAVIGATION KINEMATICS (Fixed) ===  

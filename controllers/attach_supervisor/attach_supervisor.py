@@ -15,6 +15,7 @@ class InstantAttachSupervisor:
         self.attach_distance = 2.5
         self.attach_horizontal = 2.5
         self.attach_vertical = 2.0
+        self.pickup_altitude_ceiling = 0.45
         self.follow_offset = [0.0, 0.0, -0.12]
 
         if not self.drone:
@@ -41,7 +42,7 @@ class InstantAttachSupervisor:
         if (
             dist <= self.attach_distance
             or (horizontal_dist <= self.attach_horizontal and vertical_dist <= self.attach_vertical)
-        ):
+        ) and drone_pos[2] <= self.pickup_altitude_ceiling:
             self.attached = True
             # Keep the package under the drone body once attached.
             self.follow_offset = [0.0, 0.0, -0.12]
