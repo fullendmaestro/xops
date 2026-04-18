@@ -49,6 +49,7 @@ class MavicAutonomous:
         self.drop_pos = [2.5, -2.5, 0.3]  # Drop location - different from initial pickup  
         self.cruise_alt = 1.0  
         self.climb_alt = 1.5  # Higher altitude for horizontal movement  
+        self.land_alt = 0.08
           
         self.state = "TAKEOFF"  
         self.target_altitude = self.cruise_alt  
@@ -160,6 +161,24 @@ class MavicAutonomous:
             elif self.state == "RETURN_HOME":  
                 self.target_x, self.target_y = 0.0, 0.0  
                 self.target_altitude = self.cruise_alt  
+                if dist_to_target < 0.15:
+                    print("🛬 Home reached. Starting landing...")
+                    self.state = "LAND_DESCEND"
+
+            elif self.state == "LAND_DESCEND":
+                self.target_x, self.target_y = 0.0, 0.0
+                self.target_altitude = max(self.land_alt, self.target_altitude - 0.003)
+                if altitude <= self.land_alt + 0.03:
+                    print("✅ Landed.")
+                    self.state = "LANDED"
+
+            elif self.state == "LANDED":
+                # Stop all propellers once landed.
+                self.front_left_motor.setVelocity(0.0)
+                self.front_right_motor.setVelocity(0.0)
+                self.rear_left_motor.setVelocity(0.0)
+                self.rear_right_motor.setVelocity(0.0)
+                continue
   
             # === NAVIGATION KINEMATICS (Fixed) ===  
             pitch_disturbance = 0.0  
@@ -169,7 +188,7 @@ class MavicAutonomous:
             yaw_disturbance = CLAMP(-yaw * 1.5, -0.5, 0.5)   
   
             # Only translate if we are in a flying state  
-            if dist_to_target > 0.05 and self.state in ["FLY_TO_BOX", "FLY_TO_DROP"]:  
+            if dist_to_target > 0.05 and self.state in ["FLY_TO_BOX", "FLY_HORIZONTAL", "RETURN_HOME"]:  
                   
                 # Fixed coordinate transformation  
                 local_x = dx * math.cos(-yaw) - dy * math.sin(-yaw)  
