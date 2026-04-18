@@ -1,40 +1,133 @@
 #VRML_SIM R2025a utf8
 
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
-EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/RectangleArena.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/Floor.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/SandyGround.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/buildings/protos/SmallManor.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/factory/manhole/protos/SquareManhole.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/factory/containers/protos/CardboardBox.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/dji/mavic/protos/Mavic2Pro.proto"
 
 WorldInfo {
+  info [
+    "XOPS City World"
+    "SquareManhole pads are used as pickup, dropoff and home waypoints"
+  ]
+  title "XOPS City"
+  basicTimeStep 8
+  defaultDamping Damping {
+    linear 0.5
+    angular 0.5
+  }
 }
+
 Viewpoint {
-  orientation 0.1305957788829366 0.02889092384383546 -0.991014660364522 2.7099276034127624
-  position 9.007517522459755 5.2850977670729025 2.4998151041907395
-  follow "rectangle arena"
-  followType "Mounted Shot"
+  orientation 0.22133529479118095 0.054899405638403255 -0.9736518426927515 2.716613632390834
+  position 15.681735250785358 -20.96674925809007 17.892678643846055
+  near 0.2
+  follow "Drone1"
+  followSmoothness 0.2
 }
+
 TexturedBackground {
+  luminosity 2.5
 }
-RectangleArena {
-  floorSize 10 10
+
+TexturedBackgroundLight {
 }
-Mavic2Pro {
-  hidden position_0_0 -1.650890695596414e-08
-  hidden position_5_0 3.66753949101911e-08
-  hidden rotation_6 0 1 0 4.2146848510894035e-08
-  hidden position_6_0 1.4440999276725061e-08
-  translation -0.006872765031376543 0.509614864483878 0.0655726722492799
-  rotation -2.9293035582210646e-05 -0.9999964744156477 -0.002655239761880977 0.07011204184391882
+
+Floor {
+  size 120 120
+  tileSize 6 6
+  appearance SandyGround {
+  }
+}
+
+SmallManor {
+  translation -20.0 -15.0 0
+  rotation 0 0 1 0.9
+}
+
+SmallManor {
+  translation -22.0 17.0 0
+  rotation 0 0 1 -0.6
+  name "small manor(1)"
+}
+
+SmallManor {
+  translation 16.0 12.5 0
+  rotation 0 0 1 1.6
+  name "small manor(2)"
+}
+
+SmallManor {
+  translation 24.0 -10.0 0
+  rotation 0 0 1 2.25
+  name "small manor(3)"
+}
+
+DEF PAD_PICKUP_ALPHA SquareManhole {
+  translation -8.0 6.0 -0.03
+}
+
+DEF PAD_PICKUP_BRAVO SquareManhole {
+  translation 10.0 8.0 -0.03
+}
+
+DEF PAD_PICKUP_CHARLIE SquareManhole {
+  translation -6.5 -9.5 -0.03
+}
+
+DEF PAD_DROPOFF_DELTA SquareManhole {
+  translation 14.5 -7.5 -0.03
+}
+
+DEF PAD_DROPOFF_ECHO SquareManhole {
+  translation -14.0 -5.5 -0.03
+}
+
+DEF PAD_DROPOFF_FOXTROT SquareManhole {
+  translation 4.0 15.0 -0.03
+}
+
+DEF PAD_HOME_DRONE1 SquareManhole {
+  translation 0.0 0.0 -0.03
+}
+
+DEF PAD_HOME_DRONE2 SquareManhole {
+  translation 2.6 -1.7 -0.03
+}
+
+DEF PACKAGE_BOX CardboardBox {
+  translation -8.0 6.0 0.35
+  rotation 0 0 1 0
+}
+
+DEF DRONE1 Mavic2Pro {
+  translation 0 0 0.1
+  rotation 0 0 1 3.141590777218456
+  name "Drone1"
+  controller "tashi_drone"
+  cameraSlot [
+    Camera {
+      width 400
+      height 240
+      near 0.2
+    }
+  ]
+}
+
+DEF DRONE2 Mavic2Pro {
+  translation 2.6 -1.7 0.1
+  rotation 0 0 1 3.141590777218456
   name "Drone2"
   controller "tashi_drone"
 }
-Mavic2Pro {
-  hidden position_0_0 -5.140601724264876e-09
-  hidden position_5_0 5.0000391322221584e-05
-  hidden rotation_6 0 1 0 5.0000392866772625e-05
-  hidden position_6_0 -0.00011888574478494616
-  hidden rotation_7 -1 0 0 0.00011888574490025254
-  translation -0.9096355639722709 -0.23200725599780486 0.06557267120876886
-  rotation 0.03504452709591601 0.01375155763285892 0.9992911366480209 -2.39432311084233
-  name "Drone1"
-  controller "tashi_drone"
+
+Robot {
+  translation 0 0 0.01
+  name "XopsSupervisor"
+  controller "xops_supervisor"
+  supervisor TRUE
 }
