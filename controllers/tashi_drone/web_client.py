@@ -15,6 +15,7 @@ from flask_cors import CORS
   
 import config  
 from tashi_manager import TashiNode  
+from xops.locations import list_location_options, resolve_location
   
 app = Flask(__name__)  
 CORS(app)  # Enable CORS for web clients  
@@ -35,9 +36,14 @@ class TashiWebClient:
         self.drone_states = {}  
         self.delivery_history = []  
         self.reputation_scores = {}  
+
+        # Delivery award engine
+        self._award_lock = threading.Lock()
+        self._awarder_running = True
           
         # Initialize Tashi connection  
         self._init_tashi_connection()  
+        threading.Thread(target=self._award_loop, daemon=True).start()
           
     def _init_tashi_connection(self):  
         """Initialize connection to Tashi P2P network"""  
@@ -132,9 +138,9 @@ class TashiWebClient:
                 self._handle_reputation_update(data)  
                   
         except json.JSONDecodeError:  
-            # Handle legacy messages  
-            if "text" in data:  
-                print(f"[{self.client_id}] Legacy message: {data['text']}")  
+            # Handle legacy non-JSON messages  
+            if "Mission START" in msg:
+                print(f"[{self.client_id}] Legacy message: {msg}")
         except Exception as e:  
             print(f"[{self.client_id}] Message processing error: {e}")  
               
@@ -162,6 +168,51 @@ class TashiWebClient:
             self.active_requests[request_id]["status"] = "awarded"  
             self.active_requests[request_id]["awarded_drone"] = data["awarded_drone_id"]  
             self.active_requests[request_id]["final_price"] = data["final_price"]  
+
+    def _award_loop(self):
+        """Pick winning bids once each request reaches its bid deadline."""
+        while self._awarder_running:
+            time.sleep(0.5)
+            now = time.time()
+
+            with self._award_lock:
+                for request_id, req in list(self.active_requests.items()):
+                    if req.get("status") != "pending":
+                        continue
+
+                    deadline = req.get("bid_deadline", 0)
+                    if now < deadline:
+                        continue
+
+                    bids = req.get("bids", [])
+                    if not bids:
+                        req["status"] = "no_bids"
+                        continue
+
+                    winning_bid = min(
+                        bids,
+                        key=lambda bid: (
+                            bid.get("bid_price", float("inf")),
+                            bid.get("eta_minutes", float("inf")),
+                        ),
+                    )
+
+                    award_message = {
+                        "type": "bid_awarded",
+                        "request_id": request_id,
+                        "awarded_drone_id": winning_bid["drone_id"],
+                        "final_price": winning_bid["bid_price"],
+                        "awarded_at": now,
+                    }
+
+                    if self.tashi and self.tashi.broadcast(json.dumps(award_message)):
+                        req["status"] = "awarded"
+                        req["awarded_drone"] = winning_bid["drone_id"]
+                        req["final_price"] = winning_bid["bid_price"]
+                        print(
+                            f"[{self.client_id}] Awarded {request_id} to {winning_bid['drone_id']} "
+                            f"for ${winning_bid['bid_price']}"
+                        )
               
     def _handle_delivery_confirmation(self, data: Dict[str, Any]):  
         """Track delivery completions"""  
@@ -241,23 +292,47 @@ def get_request(request_id):
 @app.route('/api/requests', methods=['POST'])  
 def create_request():  
     """Submit a new delivery request"""  
-    data = request.get_json()  
+    data = request.get_json() or {}
       
     # Validate required fields  
-    required_fields = ["customer_id", "pickup", "dropoff", "package_weight"]  
-    missing = [field for field in required_fields if field not in data]  
+    required_fields = ["customer_id", "package_weight"]
+    missing = [field for field in required_fields if field not in data]
     if missing:  
         return jsonify({"error": f"Missing fields: {missing}"}), 400  
+
+    payload = dict(data)
+    try:
+        if payload.get("pickup_id"):
+            payload["pickup"] = resolve_location(payload["pickup_id"], "pickup")
+        if payload.get("dropoff_id"):
+            payload["dropoff"] = resolve_location(payload["dropoff_id"], "dropoff")
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    if "pickup" not in payload or "dropoff" not in payload:
+        return jsonify({"error": "Provide pickup/dropoff coordinates or pickup_id/dropoff_id"}), 400
+
+    if not isinstance(payload.get("package_weight"), (int, float)) or payload["package_weight"] <= 0:
+        return jsonify({"error": "package_weight must be a positive number"}), 400
+
+    if "bid_deadline" not in payload:
+        payload["bid_deadline"] = time.time() + 12
           
     # Submit to swarm  
-    success = web_client.submit_delivery_request(data)  
+    success = web_client.submit_delivery_request(payload)  
     if success:  
         return jsonify({  
             "message": "Delivery request submitted",  
-            "request_id": data.get("request_id")  
+            "request_id": payload.get("request_id")  
         }), 201  
     else:  
         return jsonify({"error": "Failed to submit request"}), 500  
+
+
+@app.route('/api/locations', methods=['GET'])
+def get_locations():
+    """Get predefined pickup and dropoff options for the frontend."""
+    return jsonify(list_location_options())
   
 @app.route('/api/history', methods=['GET'])  
 def get_history():  
@@ -296,6 +371,7 @@ if __name__ == "__main__":
     print("Endpoints:")  
     print("  GET  /api/status - Get marketplace status")  
     print("  GET  /api/requests - Get active requests")  
+    print("  GET  /api/locations - Get predefined pickup/dropoff points")
     print("  POST /api/requests - Submit delivery request")  
     print("  GET  /api/history - Get delivery history")  
     print("  GET  /api/drones - Get drone information")  
