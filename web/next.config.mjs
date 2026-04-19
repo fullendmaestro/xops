@@ -1,15 +1,13 @@
 /** @type {import('next').NextConfig} */
+const webClientUrl = process.env.XOPS_WEB_CLIENT_URL ?? "http://127.0.0.1:5000"
+
 const nextConfig = {
   rewrites: async () => {
     return {
       beforeFiles: [
         {
-          source: '/api/:path*',
-          destination: 'http://localhost:8080/api/:path*',
-        },
-        {
-          source: '/events',
-          destination: 'http://localhost:8080/events',
+          source: "/api/:path*",
+          destination: `${webClientUrl}/api/:path*`,
         },
       ],
     }

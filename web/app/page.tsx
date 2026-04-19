@@ -1,10 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-
-import { Badge } from "@/components/ui/badge"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -14,287 +11,472 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { AlertCircle, CheckCircle, Clock, Truck } from "lucide-react"
 
-const API_BASE = "http://localhost:5000"
+// API configuration - connects directly to Tashi Server
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
-type LocationOption = {
+interface LocationOption {
   id: string
   label: string
   position: { x: number; y: number; z: number }
 }
 
-type RequestRecord = {
-  request_id: string
-  customer_id: string
-  package_weight: number
-  pickup: { x: number; y: number; z: number }
-  dropoff: { x: number; y: number; z: number }
+interface Drone {
+  id: string
+  name: string
   status: string
-  awarded_drone?: string
-  final_price?: number
+  battery_level: number
+  location: { x: number; y: number; z: number }
 }
 
-type DroneRecord = {
-  id: string
-  capabilities: {
-    max_payload: number
-    max_range: number
-    battery_capacity: number
-    reputation: number
+interface DeliveryRequest {
+  request_id: string
+  customer_id: string
+  status: string
+  pickup_location: string
+  dropoff_location: string
+  package_weight: number
+  assigned_drone: string | null
+}
+
+type RawRequest = {
+  request_id?: string
+  customer_id?: string
+  status?: string
+  pickup_location?: string
+  dropoff_location?: string
+  pickup?: { x: number; y: number; z: number }
+  dropoff?: { x: number; y: number; z: number }
+  package_weight?: number
+  assigned_drone?: string | null
+  awarded_drone?: string | null
+}
+
+type RawDrone = {
+  id?: string
+  capabilities?: {
+    base_location?: { x: number; y: number; z: number }
   }
 }
 
-function LocationChip({ location }: { location: { x: number; y: number; z: number } }) {
-  return (
-    <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300">
-      ({location.x.toFixed(1)}, {location.y.toFixed(1)}, {location.z.toFixed(1)})
-    </span>
+const formatPosition = (position?: { x: number; y: number; z: number }) => {
+  if (!position) return "Unknown"
+  return `${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`
+}
+
+const normalizeRequests = (payload: unknown): DeliveryRequest[] => {
+  if (Array.isArray(payload)) {
+    return payload as DeliveryRequest[]
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return []
+  }
+
+  const activeRequests = (
+    payload as { active_requests?: Record<string, RawRequest> }
+  ).active_requests
+  if (!activeRequests || typeof activeRequests !== "object") {
+    return []
+  }
+
+  return Object.entries(activeRequests).map(([requestId, request]) => ({
+    request_id: request.request_id ?? requestId,
+    customer_id: request.customer_id ?? "unknown",
+    status: request.status ?? "pending",
+    pickup_location: request.pickup_location ?? formatPosition(request.pickup),
+    dropoff_location:
+      request.dropoff_location ?? formatPosition(request.dropoff),
+    package_weight: Number(request.package_weight ?? 0),
+    assigned_drone: request.assigned_drone ?? request.awarded_drone ?? null,
+  }))
+}
+
+const normalizeDrones = (payload: unknown): Drone[] => {
+  if (Array.isArray(payload)) {
+    return payload as Drone[]
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return []
+  }
+
+  return Object.entries(payload as Record<string, RawDrone>).map(
+    ([key, drone]) => ({
+      id: drone.id ?? key,
+      name: drone.id ?? key,
+      status: "available",
+      battery_level: 100,
+      location: drone.capabilities?.base_location ?? { x: 0, y: 0, z: 0 },
+    })
   )
 }
 
 export default function Home() {
   const [pickupOptions, setPickupOptions] = useState<LocationOption[]>([])
   const [dropoffOptions, setDropoffOptions] = useState<LocationOption[]>([])
-  const [requests, setRequests] = useState<Record<string, RequestRecord>>({})
-  const [drones, setDrones] = useState<Record<string, DroneRecord>>({})
+  const [requests, setRequests] = useState<DeliveryRequest[]>([])
+  const [drones, setDrones] = useState<Drone[]>([])
 
-  const [customerId, setCustomerId] = useState("customer_001")
+  const [customerId, setCustomerId] = useState("cust_001")
   const [pickupId, setPickupId] = useState("")
   const [dropoffId, setDropoffId] = useState("")
-  const [weight, setWeight] = useState("2.5")
+  const [weight, setWeight] = useState("1.0")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const statusSummary = useMemo(() => {
-    const list = Object.values(requests)
-    const pending = list.filter((item) => item.status === "pending").length
-    const awarded = list.filter((item) => item.status === "awarded").length
-    return { total: list.length, pending, awarded }
-  }, [requests])
+  const [error, setError] = useState("")
 
   useEffect(() => {
-    const loadInitial = async () => {
+    const fetchLocations = async () => {
       try {
-        const [locationRes, requestRes, droneRes] = await Promise.all([
-          fetch(`${API_BASE}/api/locations`),
-          fetch(`${API_BASE}/api/requests`),
-          fetch(`${API_BASE}/api/drones`),
-        ])
-
-        if (!locationRes.ok || !requestRes.ok || !droneRes.ok) {
-          throw new Error("Could not reach xops web client API")
+        const res = await fetch(`${API_BASE_URL}/api/locations`)
+        if (res.ok) {
+          const data = await res.json()
+          setPickupOptions(data.pickup || [])
+          setDropoffOptions(data.dropoff || [])
+          if (data.pickup?.length > 0) setPickupId(data.pickup[0].id)
+          if (data.dropoff?.length > 0) setDropoffId(data.dropoff[0].id)
         }
-
-        const locationData = await locationRes.json()
-        setPickupOptions(locationData.pickup ?? [])
-        setDropoffOptions(locationData.dropoff ?? [])
-
-        if (!pickupId && locationData.pickup?.[0]?.id) {
-          setPickupId(locationData.pickup[0].id)
-        }
-        if (!dropoffId && locationData.dropoff?.[0]?.id) {
-          setDropoffId(locationData.dropoff[0].id)
-        }
-
-        const requestData = await requestRes.json()
-        setRequests(requestData.active_requests ?? {})
-
-        const droneData = await droneRes.json()
-        setDrones(droneData ?? {})
-        setError(null)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load dashboard data")
+        console.error("Failed to fetch locations:", err)
       }
     }
 
-    loadInitial()
-    const timer = window.setInterval(loadInitial, 1800)
-    return () => window.clearInterval(timer)
-  }, [pickupId, dropoffId])
+    const fetchData = async () => {
+      try {
+        const [reqRes, droneRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/requests`),
+          fetch(`${API_BASE_URL}/api/drones`),
+        ])
+        if (reqRes.ok) {
+          const data = await reqRes.json()
+          setRequests(normalizeRequests(data))
+        }
+        if (droneRes.ok) {
+          const data = await droneRes.json()
+          setDrones(normalizeDrones(data))
+        }
+      } catch (err) {
+        console.error("Failed to fetch data:", err)
+      }
+    }
 
-  const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+    fetchLocations()
+    const interval = setInterval(fetchData, 30000)
+    fetchData()
+
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setIsSubmitting(true)
-    setError(null)
+    setError("")
 
     try {
-      const payload = {
-        customer_id: customerId.trim(),
-        pickup_id: pickupId,
-        dropoff_id: dropoffId,
-        package_weight: Number(weight),
-      }
-
-      const response = await fetch(`${API_BASE}/api/requests`, {
+      const res = await fetch(`${API_BASE_URL}/api/requests`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          customer_id: customerId,
+          pickup: pickupId,
+          dropoff: dropoffId,
+          package_weight: parseFloat(weight),
+        }),
       })
 
-      const body = await response.json()
-      if (!response.ok) {
-        throw new Error(body.error ?? "Unable to submit request")
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error || "Request failed")
+        return
       }
 
-      setCustomerId((prev) => (prev === "customer_001" ? "customer_002" : prev))
-      setWeight("2.5")
+      // Reset form
+      setWeight("1.0")
+      const newCustId = `cust_${String(parseInt(customerId.split("_")[1]) + 1).padStart(3, "0")}`
+      setCustomerId(newCustId)
+
+      // Refresh requests
+      const reqRes = await fetch(`${API_BASE_URL}/api/requests`)
+      if (reqRes.ok) {
+        const data = await reqRes.json()
+        setRequests(normalizeRequests(data))
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit request")
+      setError("Network error")
+      console.error(err)
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  const getStatusBadge = (status: string) => {
+    const normalizedStatus = status.toLowerCase()
+
+    switch (normalizedStatus) {
+      case "DELIVERED":
+      case "delivered":
+        return (
+          <Badge className="bg-green-100 text-green-900 dark:bg-green-900 dark:text-green-100">
+            Delivered
+          </Badge>
+        )
+      case "ASSIGNED":
+      case "assigned":
+      case "NAVIGATING_PICKUP":
+      case "navigating_pickup":
+      case "AT_PICKUP":
+      case "at_pickup":
+      case "CARRYING":
+      case "carrying":
+      case "NAVIGATING_DROPOFF":
+      case "navigating_dropoff":
+      case "awarded":
+        return (
+          <Badge className="bg-blue-100 text-blue-900 dark:bg-blue-900 dark:text-blue-100">
+            In Progress
+          </Badge>
+        )
+      case "RETURNING":
+      case "returning":
+        return (
+          <Badge className="bg-purple-100 text-purple-900 dark:bg-purple-900 dark:text-purple-100">
+            Returning
+          </Badge>
+        )
+      default:
+        return <Badge variant="outline">{status}</Badge>
+    }
+  }
+
+  const totalRequests = requests.length
+  const pendingRequests = requests.filter(
+    (r) => !["delivered", "returning"].includes(r.status.toLowerCase())
+  ).length
+  const awardedRequests = requests.filter((r) => r.assigned_drone).length
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_0%_0%,#334155_0,#0f172a_45%,#020617_100%)] p-4 text-zinc-100 md:p-8">
-      <main className="mx-auto grid max-w-6xl gap-4 md:grid-cols-[1.1fr_1fr]">
-        <Card className="border-zinc-800/80 bg-zinc-950/85">
-          <CardHeader>
-            <CardTitle className="text-xl tracking-wide text-cyan-300">XOPS Dispatch Console</CardTitle>
-            <CardDescription className="text-zinc-400">
-              Submit a delivery request with predefined pickup and drop-off pads.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="grid gap-4" onSubmit={onSubmit}>
-              <div className="grid gap-1.5">
-                <Label htmlFor="customer-id">Customer ID</Label>
-                <Input
-                  id="customer-id"
-                  value={customerId}
-                  onChange={(event) => setCustomerId(event.target.value)}
-                  placeholder="customer_001"
-                  required
-                />
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label>Pickup Point</Label>
-                <Select value={pickupId} onValueChange={setPickupId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select pickup" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pickupOptions.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label>Drop-off Point</Label>
-                <Select value={dropoffId} onValueChange={setDropoffId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select drop-off" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {dropoffOptions.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="weight">Package Weight (kg)</Label>
-                <Input
-                  id="weight"
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  value={weight}
-                  onChange={(event) => setWeight(event.target.value)}
-                  required
-                />
-              </div>
-
-              <Button disabled={isSubmitting || !pickupId || !dropoffId} type="submit" className="h-10">
-                {isSubmitting ? "Submitting..." : "Submit Delivery Request"}
-              </Button>
-              {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-            </form>
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-4">
-          <Card className="border-zinc-800/80 bg-zinc-950/85">
-            <CardHeader>
-              <CardTitle className="text-base text-zinc-200">Live Marketplace Snapshot</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
-                <p className="text-xs text-zinc-400">Total Requests</p>
-                <p className="text-2xl font-semibold text-cyan-300">{statusSummary.total}</p>
-              </div>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
-                <p className="text-xs text-zinc-400">Pending Bids</p>
-                <p className="text-2xl font-semibold text-amber-300">{statusSummary.pending}</p>
-              </div>
-              <div className="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
-                <p className="text-xs text-zinc-400">Awarded</p>
-                <p className="text-2xl font-semibold text-emerald-300">{statusSummary.awarded}</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-zinc-800/80 bg-zinc-950/85">
-            <CardHeader>
-              <CardTitle className="text-base text-zinc-200">Drone Fleet</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2">
-              {Object.values(drones).map((drone) => (
-                <div key={drone.id} className="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-cyan-200">{drone.id}</p>
-                    <Badge variant="outline">Rep {drone.capabilities.reputation.toFixed(1)}</Badge>
-                  </div>
-                  <p className="mt-1 text-xs text-zinc-400">
-                    Payload {drone.capabilities.max_payload}kg • Range {drone.capabilities.max_range}m
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold tracking-tight">XOPS</h1>
+          <p className="mt-2 text-muted-foreground">
+            Decentralized drone delivery marketplace
+          </p>
         </div>
 
-        <Card className="border-zinc-800/80 bg-zinc-950/85 md:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-base text-zinc-200">Active Requests</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            {Object.values(requests).length === 0 ? (
-              <p className="text-sm text-zinc-400">No active requests yet.</p>
-            ) : (
-              Object.values(requests).map((item) => (
-                <article key={item.request_id} className="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="font-medium text-zinc-200">{item.request_id}</h2>
-                    <Badge variant={item.status === "awarded" ? "secondary" : "outline"}>{item.status}</Badge>
+        {/* Main Grid */}
+        <div className="grid gap-8 lg:grid-cols-3">
+          {/* Left Column - Form */}
+          <div className="lg:col-span-1">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">New Delivery</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="customer" className="text-sm">
+                      Customer ID
+                    </Label>
+                    <Input
+                      id="customer"
+                      value={customerId}
+                      onChange={(e) => setCustomerId(e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="cust_001"
+                    />
                   </div>
-                  <p className="mb-2 text-xs text-zinc-400">
-                    Customer {item.customer_id} • {item.package_weight}kg
-                  </p>
-                  <div className="flex flex-wrap gap-2 text-xs text-zinc-300">
-                    <LocationChip location={item.pickup} />
-                    <span className="self-center text-zinc-500">to</span>
-                    <LocationChip location={item.dropoff} />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup" className="text-sm">
+                      Pickup Location
+                    </Label>
+                    <Select value={pickupId} onValueChange={setPickupId}>
+                      <SelectTrigger id="pickup" className="h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pickupOptions.map((opt) => (
+                          <SelectItem key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  {item.awarded_drone ? (
-                    <p className="mt-2 text-xs text-emerald-300">
-                      Awarded to {item.awarded_drone} for ${item.final_price?.toFixed(2)}
-                    </p>
-                  ) : null}
-                </article>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </main>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dropoff" className="text-sm">
+                      Dropoff Location
+                    </Label>
+                    <Select value={dropoffId} onValueChange={setDropoffId}>
+                      <SelectTrigger id="dropoff" className="h-8 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dropoffOptions.map((opt) => (
+                          <SelectItem key={opt.id} value={opt.id}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="weight" className="text-sm">
+                      Package Weight (kg)
+                    </Label>
+                    <Input
+                      id="weight"
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      value={weight}
+                      onChange={(e) => setWeight(e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="1.0"
+                    />
+                  </div>
+
+                  {error && (
+                    <div className="flex gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                      <AlertCircle className="size-4 shrink-0" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full"
+                    size="sm"
+                  >
+                    {isSubmitting ? "Submitting..." : "Submit Request"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* Marketplace Stats */}
+            <div className="mt-6 grid gap-3">
+              <div className="rounded-lg border border-foreground/10 p-3">
+                <div className="text-2xl font-bold">{totalRequests}</div>
+                <div className="text-xs text-muted-foreground">
+                  Total Requests
+                </div>
+              </div>
+              <div className="rounded-lg border border-foreground/10 p-3">
+                <div className="text-2xl font-bold">{pendingRequests}</div>
+                <div className="text-xs text-muted-foreground">Pending</div>
+              </div>
+              <div className="rounded-lg border border-foreground/10 p-3">
+                <div className="text-2xl font-bold">{awardedRequests}</div>
+                <div className="text-xs text-muted-foreground">Assigned</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Status and Fleet */}
+          <div className="space-y-6 lg:col-span-2">
+            {/* Drone Fleet */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Drone Fleet</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {drones.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">
+                      No drones available
+                    </div>
+                  ) : (
+                    drones.map((drone) => (
+                      <div
+                        key={drone.id}
+                        className="flex items-center justify-between rounded-lg border border-foreground/10 p-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="rounded-full bg-primary/10 p-2">
+                            <Truck className="size-4" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium">
+                              {drone.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {drone.status} · {drone.battery_level}% battery
+                            </div>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          Ready
+                        </Badge>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Active Requests */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Active Requests</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {requests.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">
+                      No active requests
+                    </div>
+                  ) : (
+                    requests.map((req) => (
+                      <div
+                        key={req.request_id}
+                        className="flex items-start justify-between rounded-lg border border-foreground/10 p-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="font-mono text-xs text-muted-foreground">
+                              {req.request_id.slice(0, 8)}
+                            </div>
+                            {getStatusBadge(req.status)}
+                          </div>
+                          <div className="mt-2 space-y-1 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">
+                                From:
+                              </span>{" "}
+                              {req.pickup_location}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">To:</span>{" "}
+                              {req.dropoff_location}
+                            </div>
+                            {req.assigned_drone && (
+                              <div>
+                                <span className="text-muted-foreground">
+                                  Drone:
+                                </span>{" "}
+                                {req.assigned_drone}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
