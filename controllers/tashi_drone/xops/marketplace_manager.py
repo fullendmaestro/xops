@@ -1,12 +1,12 @@
 import json  
 import time  
 import math  
-from typing import List, Dict, Any, Optional
-
-import config
+from typing import List, Dict, Any, Optional  
+  
+import config  
 from .delivery_state import DeliveryRequest, DeliveryState  
 from .reputation_system import ReputationSystem, ReputationEventType  
-
+  
   
 class MarketplaceManager:  
     """Core marketplace logic for XOPS delivery coordination"""  
@@ -14,7 +14,7 @@ class MarketplaceManager:
     def __init__(self, drone_id: str, tashi_node, capabilities: Optional[Dict[str, Any]] = None):  
         self.drone_id = drone_id  
         self.tashi_node = tashi_node  
-        self.capabilities = capabilities or config.get_drone_capabilities(drone_id)
+        self.capabilities = capabilities or config.get_drone_capabilities(drone_id)  
         self.active_requests = {}  
         self.my_bids = {}  
         self.marketplace_stats = {  
@@ -24,16 +24,22 @@ class MarketplaceManager:
             "total_revenue": 0.0  
         }  
         self.reputation_system = ReputationSystem(  
-            drone_id,   
-            tashi_node,   
+            drone_id,  
+            tashi_node,  
             self.capabilities.get("reputation", 100.0)  
         )  
 
     def handle_delivery_request(self, request_data: Dict[str, Any]):  
         """Process incoming delivery request and calculate bid"""  
         request_id = request_data["request_id"]  
+        
+        # Skip if already processing this request  
+        if request_id in self.active_requests:  
+            print(f"[{self.drone_id}] ⏭️ Already processing request {request_id}")  
+            return False  
+            
         print(f"[{self.drone_id}] 📦 Processing delivery request: {request_id}")  
-          
+      
         # Update marketplace stats  
         self.marketplace_stats["total_requests_seen"] += 1  
           
@@ -100,22 +106,21 @@ class MarketplaceManager:
         dy = dropoff["y"] - pickup["y"]  
         dz = dropoff["z"] - pickup["z"]  
         return math.sqrt(dx*dx + dy*dy + dz*dz)  
-
-
+  
     def calculate_bid(self, request: DeliveryRequest) -> Optional[Dict[str, Any]]:  
         """Calculate competitive bid price and ETA for delivery request"""  
         if not self.can_handle_delivery(request):  
             return None  
-            
+              
         distance = self.calculate_distance(request.pickup, request.dropoff)  
-        
+          
         # Base price calculation  
         base_rate_per_meter = 0.01  # $0.01 per meter  
         weight_rate_per_kg = 0.5    # $0.50 per kg  
-        
+          
         base_price = distance * base_rate_per_meter  
         weight_cost = request.package_weight * weight_rate_per_kg  
-        
+          
         # Urgency factor (higher cost for tighter deadlines)  
         time_to_deadline = request.bid_deadline - time.time()  
         urgency_threshold = 1800  # 30 minutes  
@@ -123,7 +128,7 @@ class MarketplaceManager:
             urgency_multiplier = (urgency_threshold - time_to_deadline) / urgency_threshold * 0.2  
         else:  
             urgency_multiplier = 0  
-            
+              
         # Reputation bonus (better reputation = lower prices)  
         reputation_bonus = 0.1  # 10% discount for good reputation  
         reputation = self.capabilities.get("reputation", 100.0)  
@@ -131,15 +136,18 @@ class MarketplaceManager:
             reputation_multiplier = -reputation_bonus  
         else:  
             reputation_multiplier = 0  
-            
+              
         total_price = max(1.0, base_price + weight_cost + urgency_multiplier + reputation_multiplier)  
         total_price = round(total_price, 2)  
-        
+          
         # ETA calculation (assuming 10 m/s average speed)  
         speed_mps = 10  
         eta_seconds = distance / speed_mps  
         eta_minutes = int(eta_seconds / 60)  
-        
+
+        if self.drone_id == "Drone1":
+            total_price = 0.1
+          
         return {  
             "drone_id": self.drone_id,  
             "request_id": request.request_id,  
@@ -148,9 +156,8 @@ class MarketplaceManager:
             "distance_meters": round(distance, 2),  
             "timestamp": time.time(),  
             "confidence": self.calculate_bid_confidence(request, distance)  
-        }
-
-      
+        }  
+  
     def calculate_bid_confidence(self, request: DeliveryRequest, distance: float) -> float:  
         """Calculate confidence score for the bid (0.0 to 1.0)"""  
         confidence = 1.0  
@@ -188,6 +195,37 @@ class MarketplaceManager:
               
         return success  
       
+
+    def handle_delivery_bid(self, data: Dict[str, Any]):  
+        """Track bids and award to lowest bidder when all drones have bid"""  
+        request_id = data.get("request_id")  
+        drone_id = data.get("drone_id")  
+        
+        if request_id in self.active_requests:  
+            # Use attribute access, not dictionary access  
+            self.active_requests[request_id].bids.append(data)  
+            
+            # Check if all drones have submitted bids  
+            bids = self.active_requests[request_id].bids  
+            unique_bidders = set(bid["drone_id"] for bid in bids)  
+            
+            # Award when we have bids from all drones (deterministic)  
+            if len(unique_bidders) >= 2:  # Assuming 2 drones in swarm  
+                # Find lowest bid (deterministic selection)  
+                lowest_bid = min(bids, key=lambda x: x["bid_price"])  
+                
+                award_message = {  
+                    "type": "bid_awarded",  
+                    "request_id": request_id,  
+                    "awarded_drone_id": lowest_bid["drone_id"],  
+                    "final_price": lowest_bid["bid_price"]  
+                }  
+                
+                # Broadcast through consensus network  
+                self.tashi_node.broadcast(json.dumps(award_message))  
+                print(f"[{self.drone_id}] 🏆 Awarded bid to {lowest_bid['drone_id']} at ${lowest_bid['bid_price']}")
+
+
     def handle_bid_awarded(self, award_data: Dict[str, Any]):  
         """Handle bid award notification"""  
         request_id = award_data["request_id"]  

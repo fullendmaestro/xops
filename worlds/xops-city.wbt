@@ -69,39 +69,48 @@ SmallManor {
 
 DEF PAD_PICKUP_ALPHA SquareManhole {
   translation -8.0 6.0 -0.03
+  name "pad_pickup_alpha"
 }
 
 DEF PAD_PICKUP_BRAVO SquareManhole {
   translation 10.0 8.0 -0.03
+  name "pad_pickup_bravo"
 }
 
 DEF PAD_PICKUP_CHARLIE SquareManhole {
   translation -6.5 -9.5 -0.03
+  name "pad_pickup_charlie"
 }
 
 DEF PAD_DROPOFF_DELTA SquareManhole {
   translation 14.5 -7.5 -0.03
+  name "pad_dropoff_delta"
 }
 
 DEF PAD_DROPOFF_ECHO SquareManhole {
   translation -14.0 -5.5 -0.03
+  name "pad_dropoff_echo"
 }
 
 DEF PAD_DROPOFF_FOXTROT SquareManhole {
   translation 4.0 15.0 -0.03
+  name "pad_dropoff_foxtrot"
 }
 
 DEF PAD_HOME_DRONE1 SquareManhole {
   translation 0.0 0.0 -0.03
+  name "pad_home_drone1"
 }
 
 DEF PAD_HOME_DRONE2 SquareManhole {
   translation 2.6 -1.7 -0.03
+  name "pad_home_drone2"
 }
 
-DEF PACKAGE_BOX CardboardBox {
-  translation -8.0 6.0 0.35
-  rotation 0 0 1 0
+DEF PACKAGE_BOX CardboardBox {  
+  translation -8.0 6.0 0.35  
+  rotation 0 0 1 0  
+  mass 0.0001  
 }
 
 DEF DRONE1 Mavic2Pro {
@@ -130,4 +139,10 @@ Robot {
   name "XopsSupervisor"
   controller "xops_supervisor"
   supervisor TRUE
+}
+
+Robot {
+  translation 0 0 0.01
+  name "TashiServer"
+  controller "tashi_server"
 }

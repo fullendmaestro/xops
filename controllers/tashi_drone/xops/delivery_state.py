@@ -72,7 +72,10 @@ class DeliveryStateMachine:
           
     def can_transition_to(self, new_state: DeliveryState) -> bool:  
         """Check if transition to new state is valid"""  
-        return new_state in self.VALID_TRANSITIONS.get(self.current_state, [])  
+        # Allow staying in the same state  
+        if new_state == self.current_state:  
+            return True  
+        return new_state in self.VALID_TRANSITIONS.get(self.current_state, [])
       
     def transition_to(self, new_state: DeliveryState, context: Optional[Dict[str, Any]] = None) -> bool:  
         """Transition to new state if valid"""  

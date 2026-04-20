@@ -1,0 +1,2 @@
+# tashi_server uses Python built-in modules only (http.server, json, etc.)
+# No external dependencies required

@@ -1,2 +1,3 @@
-flask==2.3.3  
-flask-cors==4.0.0  
+# tashi_drone controller no longer requires external HTTP libraries
+# HTTP API server is now provided by tashi_server
+# This drone controller communicates via Tashi P2P network
