@@ -5,27 +5,31 @@ import os
 import platform  
 import glob  
   
-# --- CONFIGURATION ---  
-DRONE_NAMES = ["Drone1", "Drone2"]  # Match these to your Webots robot 'name' fields  
-BASE_PORT = 9600  
+# --- CONFIGURATION ---
+NODE_SPECS = [
+    {"name": "Drone1", "port": 9600, "role": "drone"},
+    {"name": "Drone2", "port": 9601, "role": "drone"},
+    {"name": "XopsSupervisor", "port": 9602, "role": "service"},
+    {"name": "TashiServer", "port": 9605, "role": "service"},
+]
   
 # XOPS Drone Capabilities Configuration  
-DRONE_CAPABILITIES = {  
-    "Drone1": {  
-        "max_payload": 5.0,        # kg  
-        "max_range": 10000,        # meters  
-        "battery_capacity": 5000,  # mAh  
-        "base_location": {"x": 0.0, "y": 0.0, "z": 0.15},  
-        "reputation": 100.0  
-    },  
-    "Drone2": {  
-        "max_payload": 3.0,        # kg (smaller drone)  
-        "max_range": 8000,         # meters  
-        "battery_capacity": 4000,  # mAh  
-        "base_location": {"x": 2.6, "y": -1.7, "z": 0.15},  
-        "reputation": 95.0  
-    }  
-}  
+DRONE_CAPABILITIES = {
+    "Drone1": {
+        "max_payload": 5.0,        # kg
+        "max_range": 10000,        # meters
+        "battery_capacity": 5000,  # mAh
+        "base_location": {"x": 0.0, "y": 0.0, "z": 0.15},
+        "reputation": 100.0,
+    },
+    "Drone2": {
+        "max_payload": 3.0,        # kg (smaller drone)
+        "max_range": 8000,         # meters
+        "battery_capacity": 4000,  # mAh
+        "base_location": {"x": 2.6, "y": -1.7, "z": 0.15},
+        "reputation": 95.0,
+    },
+}
   
 # Resolve paths relative to this script  
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  
@@ -76,28 +80,36 @@ def generate_swarm_config():
   
     swarm_data = {}  
   
-    for i, name in enumerate(DRONE_NAMES):  
-        print(f"Generating keys for {name}...")  
+    for node in NODE_SPECS:
+        name = node["name"]
+        role = node["role"]
+        port = node["port"]
+        print(f"Generating keys for {name} ({role})...")
         try:  
             res = subprocess.check_output([key_gen_path], env=env, text=True)  
             sec = re.search(r"Secret:\s+(\S+)", res).group(1)  
             pub = re.search(r"Public:\s+(\S+)", res).group(1)  
-  
-            # Get capabilities for this drone  
-            capabilities = DRONE_CAPABILITIES.get(name, {  
-                "max_payload": 5.0,  
-                "max_range": 10000,  
-                "battery_capacity": 5000,  
-                "base_location": {"x": 0, "y": 0, "z": 0},  
-                "reputation": 100.0  
-            })  
-  
-            swarm_data[name] = {  
-                "port": BASE_PORT + i,  
-                "secret": sec,  
-                "public": pub,  
-                **capabilities  # Include XOPS capabilities  
-            }  
+
+            node_entry = {
+                "role": role,
+                "port": port,
+                "secret": sec,
+                "public": pub,
+            }
+            if role == "drone":
+                capabilities = DRONE_CAPABILITIES.get(
+                    name,
+                    {
+                        "max_payload": 5.0,
+                        "max_range": 10000,
+                        "battery_capacity": 5000,
+                        "base_location": {"x": 0, "y": 0, "z": 0},
+                        "reputation": 100.0,
+                    },
+                )
+                node_entry.update(capabilities)
+
+            swarm_data[name] = node_entry
         except Exception as e:  
             print(f"FAILED to generate keys for {name}: {e}")  
             return  
@@ -107,7 +119,7 @@ def generate_swarm_config():
         json.dump(swarm_data, f, indent=4)  
   
     print(f"\nSUCCESS: XOPS Config written to {OUTPUT_FILE}")  
-    print("Included drone capabilities for marketplace operations")  
+    print("Included drone capabilities plus service node identities")
   
 if __name__ == "__main__":  
     generate_swarm_config()

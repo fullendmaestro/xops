@@ -93,7 +93,7 @@ class TashiDroneController:
             node_id=self.name,  
             bind_addr=f"127.0.0.1:{cfg['port']}",  
             secret_key=cfg["secret"],  
-            peer_list=config.get_peers(),  
+            peer_list=config.get_peers(exclude_node=self.name),  
             tools_dir=config.TASHI_TOOLS_DIR,  
         )  
         self.tashi.on_message_callback = self.on_message_received  
@@ -175,7 +175,7 @@ class TashiDroneController:
             return False  
   
     def on_message_received(self, msg: str):  
-        print("Message recieved", msg)  
+        print(f"[{self.name}] Message recieved {msg}")  
         try:  
             data = json.loads(msg)  
             message_type = data.get("type")  
@@ -222,6 +222,10 @@ class TashiDroneController:
     def handle_bid_awarded(self, data: Dict[str, Any]):  
         request_id = data["request_id"]  
         awarded_drone_id = data["awarded_drone_id"]  
+
+        # Ignore duplicate award notifications for the same request.
+        if self.last_confirmed_request_id == request_id:
+            return
   
         if awarded_drone_id != self.name:  
             if self.state_machine.current_state == DeliveryState.BIDDING:  
@@ -233,8 +237,10 @@ class TashiDroneController:
   
         print(f"[{self.name}] Won bid for request {request_id}")  
         delivery = self.marketplace.active_requests[request_id]  
-        self.state_machine.transition_to(DeliveryState.ASSIGNED, {"delivery": delivery})  
-        self.state_machine.transition_to(DeliveryState.NAVIGATING_PICKUP)  
+        assigned_ok = self.state_machine.transition_to(DeliveryState.ASSIGNED, {"delivery": delivery})
+        if assigned_ok:
+            self.state_machine.transition_to(DeliveryState.NAVIGATING_PICKUP)
+            self.last_confirmed_request_id = request_id
   
         self.nav_mode = NavMode.TO_PICKUP  
         self.nav_phase = NavPhase.ASCEND  
@@ -490,6 +496,8 @@ class TashiDroneController:
                     )  
                 )  
   
+            # Test delivery
+
             if self.name == "Drone1" and count == 500:  
                 self.tashi.broadcast(  
                     json.dumps(  
@@ -536,6 +544,7 @@ class TashiDroneController:
                     self.state_machine.transition_to(DeliveryState.IDLE)  
                     self.nav_mode = None  
                     self.nav_phase = NavPhase.ASCEND  
+                    self.last_confirmed_request_id = None
                     self.target_waypoint = None  
                     self.target_altitude = self.CRUISE_ALTITUDE  
   

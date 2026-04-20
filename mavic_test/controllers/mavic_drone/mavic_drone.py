@@ -22,9 +22,6 @@ class MavicAutonomous:
         self.gyro.enable(self.timestep)  
         self.camera_roll_motor = self.robot.getDevice("camera roll")  
         self.camera_pitch_motor = self.robot.getDevice("camera pitch")  
-        self.gripper = self.robot.getDevice("gripper_connector")  
-        if self.gripper:    
-            self.gripper.enablePresence(self.timestep)  
   
         # Motors  
         self.front_left_motor = self.robot.getDevice("front left propeller")  
@@ -113,16 +110,10 @@ class MavicAutonomous:
   
             elif self.state == "DESCEND":    
                 self.target_altitude = max(self.box_pos[2] + 0.05, self.target_altitude - 0.002)    
-                if self.gripper:  
-                    presence = self.gripper.getPresence()  
-                    if self.step_counter % 8 == 0:  
-                        print(f"Connector presence: {presence}, distance: {self.gripper.getDistance()}")  
-                    if self.gripper.isLocked() or presence == 1:  
-                        if not self.gripper.isLocked():
-                            self.gripper.lock()  
-                        print("📦 Box Locked! Stabilizing...")    
-                        self.timer = 100  
-                        self.state = "STABILIZE_AFTER_LOCK"  
+                if altitude <= self.box_pos[2] + 0.14:
+                    print("📦 Pickup altitude reached. Stabilizing...")
+                    self.timer = 100
+                    self.state = "STABILIZE_AFTER_LOCK"
   
             elif self.state == "STABILIZE_AFTER_LOCK":    
                 self.timer -= 1    
@@ -153,9 +144,7 @@ class MavicAutonomous:
                 self.target_x, self.target_y = self.drop_pos[0], self.drop_pos[1]  
                 self.target_altitude = max(self.drop_pos[2], self.target_altitude - 0.003)  
                 if altitude < self.drop_pos[2] + 0.1:  
-                    if self.gripper and self.gripper.isLocked():  
-                        self.gripper.unlock()  
-                        print("🏁 Box Dropped at new location! Returning home...")  
+                    print("🏁 Drop zone reached. Returning home...")
                     self.state = "RETURN_HOME"  
                       
             elif self.state == "RETURN_HOME":  
@@ -209,8 +198,7 @@ class MavicAutonomous:
             clamped_alt_diff = CLAMP(self.target_altitude - altitude + self.k_vertical_offset, -1.0, 1.0)  
             vertical_input = self.k_vertical_p * (clamped_alt_diff ** 3.0)  
   
-            weight_comp = 7.0 if (self.gripper and self.gripper.isLocked()) else 0.0  
-            base_thrust = self.k_vertical_thrust + weight_comp  
+            base_thrust = self.k_vertical_thrust  
   
             # Apply final motor assignments (corrected) [2](#9-1)   
             fl = base_thrust + vertical_input - roll_input + pitch_input - yaw_disturbance  

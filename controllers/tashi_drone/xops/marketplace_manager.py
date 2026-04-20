@@ -17,6 +17,7 @@ class MarketplaceManager:
         self.capabilities = capabilities or config.get_drone_capabilities(drone_id)  
         self.active_requests = {}  
         self.my_bids = {}  
+        self.award_broadcasted = set()
         self.marketplace_stats = {  
             "total_requests_seen": 0,  
             "bids_submitted": 0,  
@@ -199,7 +200,7 @@ class MarketplaceManager:
     def handle_delivery_bid(self, data: Dict[str, Any]):  
         """Track bids and award to lowest bidder when all drones have bid"""  
         request_id = data.get("request_id")  
-        drone_id = data.get("drone_id")  
+        _ = data.get("drone_id")  
         
         if request_id in self.active_requests:  
             # Use attribute access, not dictionary access  
@@ -208,9 +209,15 @@ class MarketplaceManager:
             # Check if all drones have submitted bids  
             bids = self.active_requests[request_id].bids  
             unique_bidders = set(bid["drone_id"] for bid in bids)  
+            if request_id in self.award_broadcasted:
+                return
             
             # Award when we have bids from all drones (deterministic)  
             if len(unique_bidders) >= 2:  # Assuming 2 drones in swarm  
+                # Elect one bidder as coordinator to avoid duplicate award broadcasts.
+                if self.drone_id != sorted(unique_bidders)[0]:
+                    return
+
                 # Find lowest bid (deterministic selection)  
                 lowest_bid = min(bids, key=lambda x: x["bid_price"])  
                 
@@ -223,6 +230,7 @@ class MarketplaceManager:
                 
                 # Broadcast through consensus network  
                 self.tashi_node.broadcast(json.dumps(award_message))  
+                self.award_broadcasted.add(request_id)
                 print(f"[{self.drone_id}] 🏆 Awarded bid to {lowest_bid['drone_id']} at ${lowest_bid['bid_price']}")
 
 
@@ -263,6 +271,7 @@ class MarketplaceManager:
             del self.active_requests[request_id]  
         if request_id in self.my_bids:  
             del self.my_bids[request_id]  
+        self.award_broadcasted.discard(request_id)
               
         # Update reputation if this was our delivery  
         if drone_id == self.drone_id and status == "completed":  

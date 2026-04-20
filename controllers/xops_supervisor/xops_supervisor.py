@@ -1,8 +1,6 @@
 import json
 import math
 import os
-import re
-import subprocess
 import sys
 import time
 from typing import Any, Dict, Optional
@@ -37,12 +35,15 @@ class XopsSupervisor:
         self.current_request: Optional[Dict[str, Any]] = None
         self.assigned_drone_id: Optional[str] = None
         self.package_attached = False
-        self.follow_offset = [0.0, 0.0, -0.16]
+        self.follow_offset = [0.0, 0.0, -0.12]
 
-        self.attach_radius = 1.2
-        self.detach_radius = 1.0
-        self.pickup_max_altitude = 2.5
-        self.drop_max_altitude = 2.5
+        # Proximity-based attach/detach thresholds (same pattern as mavic_test supervisor).
+        self.attach_distance = 2.5
+        self.attach_horizontal = 2.5
+        self.attach_vertical = 2.0
+        self.pickup_altitude_ceiling = 2.5
+        self.detach_distance = 1.0
+        self.detach_altitude_ceiling = 2.5
 
         if not self.package_node:
             print("[XopsSupervisor] Missing DEF PACKAGE_BOX node in world")
@@ -66,14 +67,18 @@ class XopsSupervisor:
                 print("[XopsSupervisor] key-generate binary not found; supervisor messaging disabled")
                 return None
 
-            # result = subprocess.check_output([key_gen], text=True)
-            # secret = re.search(r"Secret:\s+(\S+)", result).group(1)
+            node_cfg = config.get_node_config(self.name)
+            if not node_cfg:
+                print(
+                    "[XopsSupervisor] Missing identity in swarm_config.json for XopsSupervisor"
+                )
+                return None
 
             tashi = TashiNode(
                 node_id=self.name,
-                bind_addr="127.0.0.1:9701",
-                secret_key="3d1RiRMXUUycGdeoWbdQWytRzQ8Y5vvmnfhj4D7Szk269AWaGkaJthmaBTKSV8PFp8MV3t",
-                peer_list=config.get_peers(),
+                bind_addr=f"127.0.0.1:{node_cfg['port']}",
+                secret_key=node_cfg["secret"],
+                peer_list=config.get_peers(exclude_node=self.name),
                 tools_dir=config.TASHI_TOOLS_DIR,
             )
             tashi.on_message_callback = self._on_message_received
@@ -89,6 +94,9 @@ class XopsSupervisor:
         return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
 
     def _on_message_received(self, msg: str):
+        print(
+                    f"[XopsSupervisor] Message recienved {msg}"
+                )
         try:
             data = json.loads(msg)
         except json.JSONDecodeError:
@@ -134,56 +142,64 @@ class XopsSupervisor:
         }
         self.tashi.broadcast(json.dumps(payload))
 
-    def _attach_if_ready(self):  
-        if self.package_attached:  
-            return  
-        if not self.current_request or not self.assigned_drone_id or not self.package_node:  
-            return  
-    
-        drone_node = self.drone_nodes.get(self.assigned_drone_id)  
-        if not drone_node:  
-            return  
-    
-        drone_pos = drone_node.getPosition()  
-        pkg_pos = self.package_node.getPosition()  
-        
-        # More lenient altitude check  
-        if drone_pos[2] > self.pickup_max_altitude + 1.0:  # Add 1m buffer  
-            return  
-    
-        dist = self._distance(drone_pos, pkg_pos)  
+    def _attach_if_ready(self):
+        # print("Attaching at proximity")
+        # print(f"Current request: {self.current_request}")
+        if self.package_attached:
+            # print("Package attached")
+            return
+        if not self.current_request or not self.assigned_drone_id or not self.package_node:
+            # print("Invalid details")
+            return
 
-        if dist <= self.attach_radius * 2.0:  # Log when close  
-            print(f"[XopsSupervisor] Drone {self.assigned_drone_id} distance to package: {dist:.2f}m") 
+        drone_node = self.drone_nodes.get(self.assigned_drone_id)
+        if not drone_node:
+            return
 
-        # Increase attachment radius for better reliability  
-        if dist <= self.attach_radius * 1.5:  # 1.8m instead of 1.2m  
-            self.package_attached = True  
-            self._broadcast_event("attached")  
-            print(f"[XopsSupervisor] Package attached to {self.assigned_drone_id}")
+        drone_pos = drone_node.getPosition()
+        pkg_pos = self.package_node.getPosition()
 
-    def _follow_attached_package(self):  
-        if not self.package_attached or not self.package_node or not self.assigned_drone_id:  
-            return  
-        drone_node = self.drone_nodes.get(self.assigned_drone_id)  
-        if not drone_node:  
-            return  
-    
-        drone_pos = drone_node.getPosition()  
-        drone_rot = drone_node.getField("rotation").getSFRotation()  
-        
-        # Calculate target position with improved offset  
-        target = [  
-            drone_pos[0] + self.follow_offset[0],  
-            drone_pos[1] + self.follow_offset[1],  
-            drone_pos[2] + self.follow_offset[2] - 0.1  # Lower attachment point  
-        ]  
-        
-        # Apply position and rotation  
-        self.package_node.getField("translation").setSFVec3f(target)  
-        self.package_node.getField("rotation").setSFRotation(drone_rot)  
-        
-        # Reset physics more frequently for stability  
+        if drone_pos[2] > self.pickup_altitude_ceiling:
+            # print("Bad pos")
+            return
+
+        dist = self._distance(drone_pos, pkg_pos)
+        dx = drone_pos[0] - pkg_pos[0]
+        dy = drone_pos[1] - pkg_pos[1]
+        dz = drone_pos[2] - pkg_pos[2]
+        horizontal_dist = math.sqrt(dx * dx + dy * dy)
+        vertical_dist = abs(dz)
+
+        if (
+            dist <= self.attach_distance
+            or (horizontal_dist <= self.attach_horizontal and vertical_dist <= self.attach_vertical)
+        ):
+            self.package_attached = True
+            self._broadcast_event("attached")
+            print(
+                f"[XopsSupervisor] Package attached to {self.assigned_drone_id} "
+                f"(3D={dist:.3f}m XY={horizontal_dist:.3f}m Z={vertical_dist:.3f}m)"
+            )
+
+    def _follow_attached_package(self):
+        if not self.package_attached or not self.package_node or not self.assigned_drone_id:
+            return
+
+        drone_node = self.drone_nodes.get(self.assigned_drone_id)
+        if not drone_node:
+            return
+
+        drone_pos = drone_node.getPosition()
+        drone_rot = drone_node.getField("rotation").getSFRotation()
+
+        target = [
+            drone_pos[0] + self.follow_offset[0],
+            drone_pos[1] + self.follow_offset[1],
+            drone_pos[2] + self.follow_offset[2],
+        ]
+
+        self.package_node.getField("translation").setSFVec3f(target)
+        self.package_node.getField("rotation").setSFRotation(drone_rot)
         self.package_node.resetPhysics()
 
     def _detach_if_ready(self):
@@ -201,12 +217,12 @@ class XopsSupervisor:
             return
 
         drone_pos = drone_node.getPosition()
-        if drone_pos[2] > self.drop_max_altitude:
+        if drone_pos[2] > self.detach_altitude_ceiling:
             return
 
         target = [dropoff["x"], dropoff["y"], max(0.3, dropoff.get("z", 0.35))]
         dist_to_drop = self._distance(drone_pos, target)
-        if dist_to_drop <= self.detach_radius:
+        if dist_to_drop <= self.detach_distance:
             self.package_node.getField("translation").setSFVec3f(target)
             self.package_node.resetPhysics()
             self.package_attached = False

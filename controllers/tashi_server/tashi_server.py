@@ -70,15 +70,15 @@ class TashiServerNode:
     def _init_tashi_connection(self):
         """Initialize connection to Tashi P2P network as non-voting observer"""
         try:
-            server_port = 9605
-            # Use a valid Base58 secret key for the server node.
-            # Can be overridden for deployments via TASHI_SERVER_SECRET.
-            server_secret = os.getenv(
-                "TASHI_SERVER_SECRET",
-                "3d1RiRMXUV8ZS5FMCreMEj8BZfg6r46qdfuuy7ZTx8LLT6c1ZFz8PaSwoXxRZSeiRjXefg",
-            )
-            
-            peers = config.get_peers()
+            node_cfg = config.get_node_config(self.name)
+            if not node_cfg:
+                raise ValueError(
+                    "Missing identity in swarm_config.json for TashiServer"
+                )
+
+            # Allow env override for deployments while defaulting to generated config.
+            server_secret = os.getenv("TASHI_SERVER_SECRET", node_cfg["secret"])
+            peers = config.get_peers(exclude_node=self.name)
             
             print(f"[{self.name}] Discovered peers: {peers}")
             
@@ -86,7 +86,7 @@ class TashiServerNode:
             # Server is a non-voting observer - it just listens and relays
             self.tashi = TashiNode(
                 node_id=self.name,
-                bind_addr=f"127.0.0.1:{server_port}",
+                bind_addr=f"127.0.0.1:{node_cfg['port']}",
                 secret_key=server_secret,
                 peer_list=peers,
                 tools_dir=config.TASHI_TOOLS_DIR,
