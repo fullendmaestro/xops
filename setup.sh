@@ -60,33 +60,14 @@ export DYLD_LIBRARY_PATH="$TARGET_LIB_DIR:$DYLD_LIBRARY_PATH"
 
 echo
 echo "[3/3] Generating swarm configuration..."
-KEY_GEN="$TOOLS_DIR/target/release/key-generate"
-CONFIG_FILE="$SCRIPT_DIR/controllers/tashi_drone/swarm_config.json"
-
-DRONE1_OUT=$("$KEY_GEN")
-DRONE1_SEC=$(echo "$DRONE1_OUT" | grep "Secret:" | awk '{print $2}')
-DRONE1_PUB=$(echo "$DRONE1_OUT" | grep "Public:" | awk '{print $2}')
-
-DRONE2_OUT=$("$KEY_GEN")
-DRONE2_SEC=$(echo "$DRONE2_OUT" | grep "Secret:" | awk '{print $2}')
-DRONE2_PUB=$(echo "$DRONE2_OUT" | grep "Public:" | awk '{print $2}')
-
-cat > "$CONFIG_FILE" << EOF
-{
-    "Drone1": {
-        "port": 9600,
-        "secret": "$DRONE1_SEC",
-        "public": "$DRONE1_PUB"
-    },
-    "Drone2": {
-        "port": 9601,
-        "secret": "$DRONE2_SEC",
-        "public": "$DRONE2_PUB"
-    }
-}
-EOF
-
-echo "  Config written to: $CONFIG_FILE"
+if command -v python3 &> /dev/null; then
+    python3 "$SCRIPT_DIR/utils/generate_config.py"
+elif command -v python &> /dev/null; then
+    python "$SCRIPT_DIR/utils/generate_config.py"
+else
+    echo "ERROR: python/python3 not found for config generation"
+    exit 1
+fi
 
 echo
 echo "=== Setup Complete ==="
