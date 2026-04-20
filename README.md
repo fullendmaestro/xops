@@ -1,80 +1,204 @@
-# Tashi Vertex Swarm Starter Kit (Webots Edition)
+# XOPS: Decentralized Drone Delivery Marketplace
 
-A **Decentralized Swarm Controller** for Webots, powered by the **Tashi Vertex** consensus engine. These drones form a peer-to-peer (P2P) mesh and reach verifiable agreement on mission commands without a central server.
+A **Decentralized Drone Delivery Marketplace** built on the Tashi Vertex consensus engine for the Vertex Swarm Challenge 2026. This system enables trustless, peer-to-peer drone delivery coordination without central servers.
 
-## Prerequisites
+## 🚀 Quick Start
+
+### Prerequisites
 
 - **Webots** R2021a or newer
 - **Rust** (install from https://rustup.rs)
 - **CMake 4.0+** (`pip install cmake`)
 - **Python 3.8+**
-- **Windows (WSL)**: If on Windows, you can use WSL to build and run the Tashi binaries. The starter kit will automatically detect and use WSL as a bridge.
+- **Bun.js 1+** and **bun** for the frontend
+- **Windows (WSL)**: If on Windows, you can use WSL to build and run the Tashi binaries
 
-## Quick Start
+### Installation
 
-### 1. Setup
 ```bash
+# 1. Clone and setup the base Tashi Vertex system
+git clone https://github.com/fullendmaestro/xops
+cd xops
 ./setup.sh
+
+# 2. Setup XOPS extensions
+cd controllers/tashi_drone
+mkdir -p xops
+
+# 3. Install frontend dependencies
+cd ../frontend
+bun install
+bun run dev
 ```
 
-This will:
-- Build the Tashi tools (`drone-comm`, `key-generate`)
-- Generate unique P2P keys for each drone
-- Create `swarm_config.json`
+### Running the System
 
-### 2. Run
-1. Open Webots
-2. Load `worlds/sample.wbt`
-3. Press **Play**
+1. **Start the Backend Swarm:**
 
-Watch the console for `Consensus Layer: READY` and mission consensus.
+   ```bash
+   # Open Webots
+   # Load worlds/sample.wbt
+   # Press Play
+   ```
 
-## Project Structure
+2. **Start the Frontend:**
+
+   ```bash
+   cd frontend
+   bun run dev
+   ```
+
+3. **Access the Marketplace:**
+   - Open http://localhost:3000 in your browser
+   - Submit delivery requests and track them in real-time
+
+## 🏗️ Architecture
+
+### Core Components
 
 ```
-├── tashi-tools/              # Rust binaries (uses tashi-vertex crate)
-│   ├── Cargo.toml
-│   └── src/bin/
-│       ├── drone-comm.rs     # P2P node for Webots
-│       └── key-generate.rs   # Key generation tool
-├── controllers/tashi_drone/  # Webots controller
-│   ├── tashi_drone.py        # Main loop
-│   ├── tashi_manager.py      # Tashi node interface
-│   ├── config.py             # Configuration
-│   └── swarm_config.json     # Generated keys (git-ignored)
-├── worlds/                   # Webots world files
-│   └── sample.wbt            # 2-drone example
-├── utils/
-│   └── generate_config.py    # Key generation script
-└── setup.sh                  # One-command setup
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Next.js       │    │   Python        │    │   Rust          │
+│   Frontend      │◄──►│   Controllers   │◄──►│   Consensus     │
+│                 │    │   (XOPS Logic)  │    │   Layer         │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## Architecture
+### Key Features
 
-- **Decentralized Control**: Each drone runs its own Python controller
-- **P2P Consensus**: Each drone launches a Tashi node that communicates directly with peers
-- **Zero-Trust Identity**: Dynamically generated Ed25519 keys sign and verify all messages
+1. **Message Protocol**: JSON message types for marketplace operations
+2. **Delivery State Machine**: Manages drone lifecycle during deliveries
+3. **Marketplace Manager**: Handles bid calculation and coordination
+4. **Reputation System**: Tracks drone reliability and performance
+5. **Configuration System**: Drone capabilities for marketplace operations
 
-## Adding More Drones
+## 📁 Project Structure
+
+```
+xops/
+├── controllers/
+│   ├── tashi_drone/
+│   │   ├── tashi_drone.py
+│   │   ├── tashi_manager.py
+│   │   ├── config.py
+│   │   └── xops/
+│   │       ├── delivery_state.py
+│   │       ├── marketplace_manager.py
+│   │       └── reputation_system.py
+│   ├── tashi_server/
+│   └── xops_supervisor/
+├── tashi-tools/              # Rust consensus tools
+├── web/                      # Next.js frontend
+├── worlds/                   # Webots simulation worlds
+├── utils/generate_config.py  # Swarm config generator
+├── setup.sh
+└── README.md
+```
+
+For a full tree, check the repository folders directly.
+
+## 🎯 Key Features
+
+### Marketplace Operations
+
+- **Delivery Requests**: Customers submit delivery requests via web interface
+- **Competitive Bidding**: Drones calculate and submit bids based on capabilities
+- **Bid Awards**: Marketplace coordinates bid awards through consensus
+- **Real-time Tracking**: Live delivery status updates across the swarm
+
+### Decentralized Coordination
+
+- **P2P Consensus**: All operations use Tashi Vertex for agreement
+- **Zero-Trust Identity**: Ed25519 cryptographic keys for all participants
+- **Reputation System**: Performance-based trust scoring without central authority
+
+### Drone Capabilities
+
+Each drone has configurable capabilities:
+
+- **Payload Capacity**: Maximum cargo weight
+- **Flight Range**: Maximum operational distance
+- **Battery Capacity**: Power limitations
+- **Base Location**: Home coordinates
+
+## 🔧 Configuration
+
+### Adding More Drones
 
 1. Edit `utils/generate_config.py` and add names to `DRONE_NAMES`
-2. Run `python utils/generate_config.py`
-3. Add matching drones in Webots with the same names
+2. Define drone capabilities in `DRONE_CAPABILITIES`
+3. Run `python utils/generate_config.py`
+4. Add matching drones in Webots with the same names
 
-## Troubleshooting
+### Customizing Drone Capabilities
 
-**Socket Error ("Failed to bind socket")**
-- Kill lingering processes: `pkill -f drone-comm`
-- On Windows: Close `drone-comm.exe` in Task Manager
-- On WSL: Run `wsl --shutdown` in your terminal
+```python
+# In utils/generate_config.py
+DRONE_CAPABILITIES = {
+    "Drone1": {
+        "max_payload": 5.0,        # kg
+        "max_range": 10000,        # meters
+        "battery_capacity": 5000,  # mAh
+        "base_location": {"x": 0, "y": 0, "z": 0},
+        "reputation": 100.0
+    }
+}
+```
 
-**Identity Mismatch**
-- Ensure drone `name` in Webots matches keys in `DRONE_NAMES`
+## 🌐 Frontend Interface
 
-**Build Errors**
-- Ensure CMake 4.0+: `pip install cmake --upgrade`
-- Check Rust is installed: `cargo --version`
+The Next.js frontend provides:
 
-## License
+- **Delivery Request Form**: Submit pickup/dropoff locations and package details
+- **Real-time Dashboard**: Track active deliveries and drone status
+- **Marketplace Statistics**: View swarm availability and performance metrics
+- **Responsive Design**: Works on desktop and mobile devices
+
+## 🔍 Message Protocol
+
+XOPS message protocol types:
+
+```json
+// Delivery Request
+{
+  "type": "delivery_request",
+  "request_id": "req_123",
+  "customer_id": "cust_456",
+  "pickup": {"x": 5.0, "y": 0.0, "z": 1.0},
+  "dropoff": {"x": -5.0, "y": 0.0, "z": 1.0},
+  "package_weight": 2.5,
+  "bid_deadline": 1640995200
+}
+
+// Delivery Bid
+{
+  "type": "delivery_bid",
+  "drone_id": "Drone1",
+  "request_id": "req_123",
+  "bid_price": 15.50,
+  "eta_minutes": 12
+}
+```
+
+## 🏆 Reputation System
+
+The decentralized reputation system tracks:
+
+- **Delivery Success Rate**: Percentage of completed deliveries
+- **On-time Performance**: Adherence to ETA estimates
+- **Customer Ratings**: Feedback-based scoring
+- **Bid Accuracy**: Reliability of time and price estimates
+
+Reputation affects:
+
+- **Pricing Advantages**: High-reputation drones get better rates
+- **Bid Priority**: Preference in competitive situations
+- **Market Trust**: Customer confidence in service quality
+
+## 📄 License
 
 Apache 2.0 - See LICENSE file
+
+---
+
+Built with ❤️ for the [**Vertex Swarm Challenge 2026**](https://dorahacks.io/hackathon/global-vertex-swarm-challenge/detail) by [**Afolabi Abdulsamad**](https://github.com/fullendmaestro/)
