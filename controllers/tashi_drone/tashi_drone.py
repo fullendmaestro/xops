@@ -498,12 +498,12 @@ class TashiDroneController:
   
             # Test delivery
 
-            if self.name == "Drone1" and count == 500:  
-                self.tashi.broadcast(  
-                    json.dumps(  
-                        {'type': 'delivery_request', 'customer_id': 'cust_001', 'pickup': {'x': -8.0, 'y': 6.0, 'z': 0.35}, 'dropoff': {'x': 4.0, 'y': 15.0, 'z': 0.35}, 'package_weight': 1, 'bid_deadline': 2776632718.092778, 'request_id': 'req_1776632688092'}  
-                    )  
-                )
+            # if self.name == "Drone1" and count == 500:  
+            #     self.tashi.broadcast(  
+            #         json.dumps(  
+            #             {'type': 'delivery_request', 'customer_id': 'cust_001', 'pickup': {'x': -8.0, 'y': 6.0, 'z': 0.35}, 'dropoff': {'x': 4.0, 'y': 15.0, 'z': 0.35}, 'package_weight': 1, 'bid_deadline': 2776632718.092778, 'request_id': 'req_1776632688092'}  
+            #         )  
+            #     )
             
   
             current_state = self.state_machine.current_state  

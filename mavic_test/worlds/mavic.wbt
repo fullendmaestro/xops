@@ -22,18 +22,6 @@ RectangleArena {
 DEF LIGHT_MYBOT Solid {  
   translation 0 3.5 0.1  
   children [  
-    Connector {  
-      translation 0 0 0.1  
-      rotation 0 1 0 0  
-      name "box_connector"  
-      type "passive"  
-      model "magnetic"  
-      distanceTolerance 0.4  
-      axisTolerance 3.14  
-      rotationTolerance 3.14
-      numberOfRotations 0  
-      snap TRUE  
-    }  
     DEF BACK Pose {  
       translation -0.09975 0 0  
       children [  
@@ -164,21 +152,6 @@ DEF MAVIC_DRONE Mavic2Pro {
   translation 0 0 0.065  
   name "Mavic"  
   controller "mavic_drone"  
-  bodySlot [  
-    Connector {  
-      translation 0 0 -0.05  
-      rotation 0 1 0 0  
-      name "gripper_connector"  
-      type "active"  
-      model "magnetic"  
-      autoLock TRUE
-      distanceTolerance 0.4  
-      axisTolerance 3.14  
-      rotationTolerance 3.14
-      numberOfRotations 0  
-      snap TRUE  
-    }  
-  ]  
 }
 
 Robot {

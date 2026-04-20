@@ -25,6 +25,9 @@ class XopsSupervisor:
         self.supervisor = Supervisor()
         self.timestep = int(self.supervisor.getBasicTimeStep())
         self.name = "XopsSupervisor"
+        self.viewpoint = self.supervisor.getFromDef("MAIN_VIEWPOINT")
+        self.default_viewpoint_target = "Drone1"
+        self.active_viewpoint_target: Optional[str] = None
 
         self.package_node = self.supervisor.getFromDef("PACKAGE_BOX")
         self.drone_nodes = {
@@ -47,6 +50,10 @@ class XopsSupervisor:
 
         if not self.package_node:
             print("[XopsSupervisor] Missing DEF PACKAGE_BOX node in world")
+        if not self.viewpoint:
+            print("[XopsSupervisor] Missing DEF MAIN_VIEWPOINT node in world")
+
+        self._set_viewpoint_follow(self.default_viewpoint_target)
 
         self.tashi = self._init_tashi_node()
 
@@ -93,6 +100,25 @@ class XopsSupervisor:
     def _distance(a, b) -> float:
         return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2)
 
+    def _set_viewpoint_follow(self, target_def: str):
+        if not self.viewpoint:
+            return
+
+        try:
+            follow_field = self.viewpoint.getField("follow")
+            follow_type_field = self.viewpoint.getField("followType")
+            if follow_field:
+                follow_field.setSFString(target_def)
+            if follow_type_field:
+                follow_type_field.setSFString("Pan and Tilt Shot")
+                self.active_viewpoint_target = target_def
+                print(f"[XopsSupervisor] Viewpoint now following {target_def}")
+        except Exception as exc:
+            print(f"[XopsSupervisor] Failed to update viewpoint follow target: {exc}")
+
+    def _reset_viewpoint_to_default(self):
+        self._set_viewpoint_follow(self.default_viewpoint_target)
+
     def _on_message_received(self, msg: str):
         print(
                     f"[XopsSupervisor] Message recienved {msg}"
@@ -111,6 +137,7 @@ class XopsSupervisor:
             }
             self.assigned_drone_id = None
             self.package_attached = False
+            self._reset_viewpoint_to_default()
             self._place_package_at_pickup()
             print(
                 f"[XopsSupervisor] Spawned package at pickup for request {data.get('request_id')}"
@@ -119,6 +146,8 @@ class XopsSupervisor:
             request_id = data.get("request_id")
             if self.current_request and request_id == self.current_request.get("request_id"):
                 self.assigned_drone_id = data.get("awarded_drone_id")
+                if self.assigned_drone_id:
+                    self._set_viewpoint_follow(self.assigned_drone_id)
                 print(
                     f"[XopsSupervisor] Delivery {request_id} assigned to {self.assigned_drone_id}"
                 )
@@ -235,6 +264,7 @@ class XopsSupervisor:
             # Clear current assignment after successful drop.
             self.current_request = None
             self.assigned_drone_id = None
+            self._reset_viewpoint_to_default()
 
     def run(self):
         print("[XopsSupervisor] Running package supervisor")
