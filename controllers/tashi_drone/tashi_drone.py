@@ -70,8 +70,11 @@ class TashiDroneController:
     CRUISE_ALTITUDE = 12.0  
     PICKUP_ALTITUDE = 1.8  
     DROPOFF_ALTITUDE = 1.8  
+    DROP_RELEASE_ALTITUDE = 3.2
     PRECISION_LAND_ALTITUDE = 0.28  
     XY_PRECISION = 0.7  
+    CRUISE_DESCEND_RADIUS = 1.8
+    TERMINAL_XY_PRECISION = 0.9
     ALT_PRECISION = 0.35  
     HOME_GROUND_ALTITUDE = 0.12  
   
@@ -109,6 +112,7 @@ class TashiDroneController:
         self.handshake_verified = False  
         self.delivery_package: Optional[Dict[str, Any]] = None  
         self.package_attached = False  
+        self.payload_weight = 0.0
         self.last_confirmed_request_id: Optional[str] = None  
   
         self.nav_mode: Optional[NavMode] = None  
@@ -241,6 +245,7 @@ class TashiDroneController:
         if assigned_ok:
             self.state_machine.transition_to(DeliveryState.NAVIGATING_PICKUP)
             self.last_confirmed_request_id = request_id
+            self.payload_weight = getattr(delivery, "package_weight", 0.0) or 0.0
   
         self.nav_mode = NavMode.TO_PICKUP  
         self.nav_phase = NavPhase.ASCEND  
@@ -273,6 +278,7 @@ class TashiDroneController:
         elif event == "detached":  
             self.package_attached = False  
             self.delivery_package = None  
+            self.payload_weight = 0.0
             print(f"[{self.name}] Supervisor confirmed package detached")  
   
     def _read_sensors(self) -> Tuple[float, float, float, float, float, float, float, float, float]:  
@@ -328,12 +334,24 @@ class TashiDroneController:
             -1,  
             1,  
         )  
+
+        payload_thrust_compensation = 0.0
+        if self.package_attached:
+            # Assist lift only when climbing; do not bias equilibrium altitude upward.
+            payload_thrust_compensation = clamp(
+                1.2 * max(self.payload_weight, 0.0) * max(clamped_altitude_error, 0.0),
+                0.0,
+                6.0,
+            )
+
         vertical_input = self.K_VERTICAL_P * pow(clamped_altitude_error, 3.0)  
   
-        front_left = self.K_VERTICAL_THRUST + vertical_input - yaw_input + pitch_input - roll_input  
-        front_right = self.K_VERTICAL_THRUST + vertical_input + yaw_input + pitch_input + roll_input  
-        rear_left = self.K_VERTICAL_THRUST + vertical_input + yaw_input - pitch_input - roll_input  
-        rear_right = self.K_VERTICAL_THRUST + vertical_input - yaw_input - pitch_input + roll_input  
+        base_thrust = self.K_VERTICAL_THRUST + payload_thrust_compensation
+
+        front_left = base_thrust + vertical_input - yaw_input + pitch_input - roll_input  
+        front_right = base_thrust + vertical_input + yaw_input + pitch_input + roll_input  
+        rear_left = base_thrust + vertical_input + yaw_input - pitch_input - roll_input  
+        rear_right = base_thrust + vertical_input - yaw_input - pitch_input + roll_input  
   
         self.front_left_motor.setVelocity(front_left)  
         self.front_right_motor.setVelocity(-front_right)  
@@ -353,7 +371,7 @@ class TashiDroneController:
             _,  
         ) = self._read_sensors()  
   
-        low_altitude = self.PICKUP_ALTITUDE if mode == NavMode.TO_PICKUP else self.DROPOFF_ALTITUDE  
+        low_altitude = self.PICKUP_ALTITUDE if mode == NavMode.TO_PICKUP else self.DROP_RELEASE_ALTITUDE
   
         if self.nav_phase == NavPhase.ASCEND:  
             self.target_waypoint = target  
@@ -364,13 +382,13 @@ class TashiDroneController:
         elif self.nav_phase == NavPhase.CRUISE:  
             self.target_waypoint = target  
             self.target_altitude = self.CRUISE_ALTITUDE  
-            if self._xy_distance_to_target(x_pos, y_pos, target) <= self.XY_PRECISION:  
+            if self._xy_distance_to_target(x_pos, y_pos, target) <= self.CRUISE_DESCEND_RADIUS:  
                 self.nav_phase = NavPhase.DESCEND  
   
         elif self.nav_phase == NavPhase.DESCEND:  
             self.target_waypoint = target  
             self.target_altitude = low_altitude  
-            close_xy = self._xy_distance_to_target(x_pos, y_pos, target) <= self.XY_PRECISION  
+            close_xy = self._xy_distance_to_target(x_pos, y_pos, target) <= self.TERMINAL_XY_PRECISION  
             close_z = abs(altitude - low_altitude) <= self.ALT_PRECISION  
             if close_xy and close_z:  
                 self.nav_phase = NavPhase.HOLD  
@@ -378,6 +396,24 @@ class TashiDroneController:
         elif self.nav_phase == NavPhase.HOLD:  
             self.target_waypoint = target  
             self.target_altitude = low_altitude  
+            close_xy = self._xy_distance_to_target(x_pos, y_pos, target) <= self.TERMINAL_XY_PRECISION
+            close_z = abs(altitude - low_altitude) <= self.ALT_PRECISION
+            if not (close_xy and close_z):
+                # If wind or controller overshoot drifts us away, continue descent guidance.
+                self.nav_phase = NavPhase.DESCEND
+            else:
+                self._apply_flight_control(  
+                    roll,  
+                    pitch,  
+                    yaw,  
+                    x_pos,  
+                    y_pos,  
+                    altitude,  
+                    roll_rate,  
+                    pitch_rate,  
+                )  
+                return True
+
             self._apply_flight_control(  
                 roll,  
                 pitch,  
@@ -388,7 +424,7 @@ class TashiDroneController:
                 roll_rate,  
                 pitch_rate,  
             )  
-            return True  
+            return False  
   
         self._apply_flight_control(  
             roll,  
@@ -530,6 +566,17 @@ class TashiDroneController:
                 )  
                 if reached:  
                     self.state_machine.transition_to(DeliveryState.DELIVERED)  
+                elif not self.package_attached:
+                    close_xy = (
+                        self._xy_distance_to_target(
+                            self.gps.getValues()[0],
+                            self.gps.getValues()[1],
+                            self.state_machine.current_delivery.dropoff,
+                        )
+                        <= self.CRUISE_DESCEND_RADIUS
+                    )
+                    if close_xy:
+                        self.state_machine.transition_to(DeliveryState.DELIVERED)
   
             elif current_state == DeliveryState.DELIVERED:  
                 if not self.package_attached:  
@@ -537,6 +584,7 @@ class TashiDroneController:
                     self.state_machine.transition_to(DeliveryState.RETURNING)  
                     self.nav_mode = NavMode.TO_HOME  
                     self.nav_phase = NavPhase.ASCEND  
+                    self.payload_weight = 0.0
   
             elif current_state == DeliveryState.RETURNING:  
                 if self._navigate_home():  

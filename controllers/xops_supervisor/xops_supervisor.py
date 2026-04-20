@@ -45,8 +45,9 @@ class XopsSupervisor:
         self.attach_horizontal = 2.5
         self.attach_vertical = 2.0
         self.pickup_altitude_ceiling = 2.5
-        self.detach_distance = 1.0
-        self.detach_altitude_ceiling = 2.5
+        self.detach_distance = 3.0
+        self.detach_horizontal = 3.5
+        self.detach_altitude_ceiling = 6.0
 
         if not self.package_node:
             print("[XopsSupervisor] Missing DEF PACKAGE_BOX node in world")
@@ -254,12 +255,19 @@ class XopsSupervisor:
 
         target = [dropoff["x"], dropoff["y"], max(0.3, dropoff.get("z", 0.35))]
         dist_to_drop = self._distance(drone_pos, target)
-        if dist_to_drop <= self.detach_distance:
+        dx = drone_pos[0] - target[0]
+        dy = drone_pos[1] - target[1]
+        horizontal_dist = math.sqrt(dx * dx + dy * dy)
+
+        if dist_to_drop <= self.detach_distance or horizontal_dist <= self.detach_horizontal:
             self.package_node.getField("translation").setSFVec3f(target)
             self.package_node.resetPhysics()
             self.package_attached = False
             self._broadcast_event("detached")
-            print(f"[XopsSupervisor] Package detached at {dropoff}")
+            print(
+                f"[XopsSupervisor] Package detached near dropoff "
+                f"(3D={dist_to_drop:.3f}m XY={horizontal_dist:.3f}m)"
+            )
 
             # Clear current assignment after successful drop.
             self.current_request = None
