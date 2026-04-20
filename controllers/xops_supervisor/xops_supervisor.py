@@ -112,7 +112,9 @@ class XopsSupervisor:
             self.assigned_drone_id = None
             self.package_attached = False
             self._place_package_at_pickup()
-            print(f"[XopsSupervisor] Prepared package for request {data.get('request_id')}")
+            print(
+                f"[XopsSupervisor] Spawned package at pickup for request {data.get('request_id')}"
+            )
         elif msg_type == "bid_awarded":
             request_id = data.get("request_id")
             if self.current_request and request_id == self.current_request.get("request_id"):
@@ -128,6 +130,7 @@ class XopsSupervisor:
         self.package_node.getField("translation").setSFVec3f(
             [pickup["x"], pickup["y"], max(0.3, pickup.get("z", 0.35))]
         )
+        self.package_node.getField("rotation").setSFRotation([0, 0, 1, 0])
         self.package_node.resetPhysics()
 
     def _broadcast_event(self, event_type: str):

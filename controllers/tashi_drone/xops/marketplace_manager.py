@@ -86,10 +86,17 @@ class MarketplaceManager:
             print(f"[{self.drone_id}] Range check failed: {distance}m > {max_range}m")  
             return False  
               
-        # Check if deadline is reasonable  
+        # Check if deadline is feasible for the estimated flight duration.
+        # The prior fixed 60s gate rejected normal web orders too aggressively.
         time_to_deadline = request.bid_deadline - time.time()  
-        if time_to_deadline < 60:  # Less than 1 minute  
-            print(f"[{self.drone_id}] Deadline check failed: {time_to_deadline}s remaining")  
+        speed_mps = 10
+        estimated_seconds = distance / speed_mps
+        required_buffer = 15.0
+        if time_to_deadline < estimated_seconds + required_buffer:  
+            print(  
+                f"[{self.drone_id}] Deadline check failed: {time_to_deadline}s remaining "  
+                f"< estimated {estimated_seconds + required_buffer:.1f}s needed"  
+            )  
             return False  
               
         # Check battery capacity (simplified)  

@@ -368,7 +368,7 @@ class TashiServerHTTPHandler(BaseHTTPRequestHandler):
             return {"error": "package_weight must be positive"}
         
         if "bid_deadline" not in payload:
-            payload["bid_deadline"] = time.time() + 30
+            payload["bid_deadline"] = time.time() + 300
         
         # Broadcast to swarm
         success = self.server_instance.broadcast_delivery_request(payload)
