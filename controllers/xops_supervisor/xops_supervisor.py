@@ -30,17 +30,25 @@ class XopsSupervisor:
         self.active_viewpoint_target: Optional[str] = None
 
         self.package_node = self.supervisor.getFromDef("PACKAGE_BOX")
-        self.drone_nodes = {
-            "Drone1": self.supervisor.getFromDef("DRONE1"),
-            "Drone2": self.supervisor.getFromDef("DRONE2"),
-        }
+
+        # Dynamically build drone_nodes from all drone entries in the swarm config.
+        self.drone_nodes: Dict[str, Any] = {}
+        for node_name, node_cfg in config.DRONE_CONFIG.items():
+            if node_cfg.get("role", "drone") == "drone":
+                def_name = node_name.upper().replace(" ", "_")
+                node = self.supervisor.getFromDef(def_name)
+                if node:
+                    self.drone_nodes[node_name] = node
+                    print(f"[XopsSupervisor] Registered drone node: {node_name} (DEF={def_name})")
+                else:
+                    print(f"[XopsSupervisor] WARNING: DEF {def_name} not found in world for {node_name}")
 
         self.current_request: Optional[Dict[str, Any]] = None
         self.assigned_drone_id: Optional[str] = None
         self.package_attached = False
         self.follow_offset = [0.0, 0.0, -0.12]
 
-        # Proximity-based attach/detach thresholds (same pattern as mavic_test supervisor).
+        # Proximity-based attach/detach thresholds.
         self.attach_distance = 2.5
         self.attach_horizontal = 2.5
         self.attach_vertical = 2.0
@@ -121,9 +129,7 @@ class XopsSupervisor:
         self._set_viewpoint_follow(self.default_viewpoint_target)
 
     def _on_message_received(self, msg: str):
-        print(
-                    f"[XopsSupervisor] Message recienved {msg}"
-                )
+        print(f"[XopsSupervisor] Message received: {msg[:120]}")
         try:
             data = json.loads(msg)
         except json.JSONDecodeError:
@@ -176,24 +182,20 @@ class XopsSupervisor:
         self.tashi.broadcast(json.dumps(payload))
 
     def _attach_if_ready(self):
-        # print("Attaching at proximity")
-        # print(f"Current request: {self.current_request}")
         if self.package_attached:
-            # print("Package attached")
             return
         if not self.current_request or not self.assigned_drone_id or not self.package_node:
-            # print("Invalid details")
             return
 
         drone_node = self.drone_nodes.get(self.assigned_drone_id)
         if not drone_node:
+            print(f"[XopsSupervisor] WARNING: no node found for {self.assigned_drone_id}")
             return
 
         drone_pos = drone_node.getPosition()
         pkg_pos = self.package_node.getPosition()
 
         if drone_pos[2] > self.pickup_altitude_ceiling:
-            # print("Bad pos")
             return
 
         dist = self._distance(drone_pos, pkg_pos)

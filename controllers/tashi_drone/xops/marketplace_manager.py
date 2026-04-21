@@ -6,6 +6,14 @@ from typing import List, Dict, Any, Optional
 import config  
 from .delivery_state import DeliveryRequest, DeliveryState  
 from .reputation_system import ReputationSystem, ReputationEventType  
+
+
+def _count_swarm_drones() -> int:
+    """Return the number of drone nodes in the swarm config."""
+    return sum(
+        1 for cfg in config.DRONE_CONFIG.values()
+        if cfg.get("role", "drone") == "drone"
+    )
   
   
 class MarketplaceManager:  
@@ -153,9 +161,6 @@ class MarketplaceManager:
         eta_seconds = distance / speed_mps  
         eta_minutes = int(eta_seconds / 60)  
 
-        if self.drone_id == "Drone1":
-            total_price = 0.1
-          
         return {  
             "drone_id": self.drone_id,  
             "request_id": request.request_id,  
@@ -218,10 +223,12 @@ class MarketplaceManager:
             unique_bidders = set(bid["drone_id"] for bid in bids)  
             if request_id in self.award_broadcasted:
                 return
-            
-            # Award when we have bids from all drones (deterministic)  
-            if len(unique_bidders) >= 2:  # Assuming 2 drones in swarm  
-                # Elect one bidder as coordinator to avoid duplicate award broadcasts.
+
+            # Award when we have bids from all eligible drones (dynamic count).
+            num_drones = _count_swarm_drones()
+            if len(unique_bidders) >= num_drones:
+                # Elect the alphabetically-first bidder as coordinator to avoid
+                # duplicate award broadcasts across the swarm.
                 if self.drone_id != sorted(unique_bidders)[0]:
                     return
 

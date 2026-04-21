@@ -9,6 +9,8 @@ import glob
 NODE_SPECS = [
     {"name": "Drone1", "port": 9600, "role": "drone"},
     {"name": "Drone2", "port": 9601, "role": "drone"},
+    {"name": "Drone3", "port": 9603, "role": "drone"},
+    {"name": "Drone4", "port": 9604, "role": "drone"},
     {"name": "XopsSupervisor", "port": 9602, "role": "service"},
     {"name": "TashiServer", "port": 9605, "role": "service"},
 ]
@@ -28,6 +30,20 @@ DRONE_CAPABILITIES = {
         "battery_capacity": 4000,  # mAh
         "base_location": {"x": 2.6, "y": -1.7, "z": 0.15},
         "reputation": 95.0,
+    },
+    "Drone3": {
+        "max_payload": 4.0,        # kg
+        "max_range": 9000,         # meters
+        "battery_capacity": 4500,  # mAh
+        "base_location": {"x": -2.6, "y": 1.7, "z": 0.15},
+        "reputation": 90.0,
+    },
+    "Drone4": {
+        "max_payload": 6.0,        # kg
+        "max_range": 12000,        # meters
+        "battery_capacity": 6000,  # mAh
+        "base_location": {"x": -2.6, "y": -1.7, "z": 0.15},
+        "reputation": 85.0,
     },
 }
   

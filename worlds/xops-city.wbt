@@ -70,6 +70,7 @@ SmallManor {
   name "small manor(3)"
 }
 
+# ---- PICKUP PADS ----
 
 DEF PAD_PICKUP_ALPHA SquareManhole {
   translation -8.0 6.0 -0.03
@@ -86,6 +87,18 @@ DEF PAD_PICKUP_CHARLIE SquareManhole {
   name "pad_pickup_charlie"
 }
 
+DEF PAD_PICKUP_GOLF SquareManhole {
+  translation 7.0 -13.0 -0.03
+  name "pad_pickup_golf"
+}
+
+DEF PAD_PICKUP_HOTEL SquareManhole {
+  translation -12.0 12.0 -0.03
+  name "pad_pickup_hotel"
+}
+
+# ---- DROPOFF PADS ----
+
 DEF PAD_DROPOFF_DELTA SquareManhole {
   translation 14.5 -7.5 -0.03
   name "pad_dropoff_delta"
@@ -101,6 +114,18 @@ DEF PAD_DROPOFF_FOXTROT SquareManhole {
   name "pad_dropoff_foxtrot"
 }
 
+DEF PAD_DROPOFF_INDIA SquareManhole {
+  translation 16.0 5.0 -0.03
+  name "pad_dropoff_india"
+}
+
+DEF PAD_DROPOFF_JULIET SquareManhole {
+  translation -4.0 -16.0 -0.03
+  name "pad_dropoff_juliet"
+}
+
+# ---- HOME PADS ----
+
 DEF PAD_HOME_DRONE1 SquareManhole {
   translation 0.0 0.0 -0.03
   name "pad_home_drone1"
@@ -110,6 +135,18 @@ DEF PAD_HOME_DRONE2 SquareManhole {
   translation 2.6 -1.7 -0.03
   name "pad_home_drone2"
 }
+
+DEF PAD_HOME_DRONE3 SquareManhole {
+  translation -2.6 1.7 -0.03
+  name "pad_home_drone3"
+}
+
+DEF PAD_HOME_DRONE4 SquareManhole {
+  translation -2.6 -1.7 -0.03
+  name "pad_home_drone4"
+}
+
+# ---- PACKAGE BOX ----
 
 DEF PACKAGE_BOX Solid {  
   translation -8.0 6.0 0.35  
@@ -135,8 +172,9 @@ DEF PACKAGE_BOX Solid {
     mass 0.001  
   }  
 }  
-  
-# Remove connectors from drone definitions - keep original Mavic2Pro:  
+
+# ---- DRONE FLEET ----
+
 DEF DRONE1 Mavic2Pro {  
   translation 0 0 0.1  
   rotation 0 0 1 3.141590777218456  
@@ -155,7 +193,21 @@ DEF DRONE2 Mavic2Pro {
   translation 2.6 -1.7 0.1  
   rotation 0 0 1 3.141590777218456  
   name "Drone2"  
-  controller "tashi_drone"  
+  controller "tashi_drone"
+}
+
+DEF DRONE3 Mavic2Pro {
+  translation -2.6 1.7 0.1
+  rotation 0 0 1 3.141590777218456
+  name "Drone3"
+  controller "tashi_drone"
+}
+
+DEF DRONE4 Mavic2Pro {
+  translation -2.6 -1.7 0.1
+  rotation 0 0 1 3.141590777218456
+  name "Drone4"
+  controller "tashi_drone"
 }
 
 Robot {

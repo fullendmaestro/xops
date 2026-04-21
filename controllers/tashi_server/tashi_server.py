@@ -37,6 +37,29 @@ except ImportError as e:
     print(f"[TashiServer] Import error: {e}")
     raise
 
+# Persistence file for delivery history — survives Webots restarts.
+HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "delivery_history.json")
+
+
+def _load_history() -> List[Dict[str, Any]]:
+    """Load persisted delivery history from disk."""
+    if not os.path.exists(HISTORY_FILE):
+        return []
+    try:
+        with open(HISTORY_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_history(history: List[Dict[str, Any]]):
+    """Persist delivery history to disk."""
+    try:
+        with open(HISTORY_FILE, "w") as f:
+            json.dump(history[-500:], f)  # Keep last 500 entries
+    except Exception as exc:
+        print(f"[TashiServer] Failed to save history: {exc}")
+
 
 class TashiServerNode:
     """
@@ -54,10 +77,28 @@ class TashiServerNode:
         # Server state
         self.is_connected = False
         self.active_requests: Dict[str, Dict[str, Any]] = {}
-        self.delivery_history: List[Dict[str, Any]] = []
+        self.delivery_history: List[Dict[str, Any]] = _load_history()
         self.reputation_scores: Dict[str, Dict[str, Any]] = {}
+
+        # Initialize drone_states from config so fleet is visible even before any message.
         self.drone_states: Dict[str, Dict[str, Any]] = {}
-        
+        for node_name, node_cfg in config.DRONE_CONFIG.items():
+            if node_cfg.get("role", "drone") == "drone":
+                self.drone_states[node_name] = {
+                    "id": node_name,
+                    "status": "idle",
+                    "current_request": None,
+                    "capabilities": {
+                        "max_payload": node_cfg.get("max_payload", 5.0),
+                        "max_range": node_cfg.get("max_range", 10000),
+                        "battery_capacity": node_cfg.get("battery_capacity", 5000),
+                        "base_location": node_cfg.get("base_location", {"x": 0, "y": 0, "z": 0}),
+                        "reputation": node_cfg.get("reputation", 100.0),
+                    },
+                    "reputation": node_cfg.get("reputation", 100.0),
+                    "last_seen": time.time(),
+                }
+
         # Broadcast queue for thread-safe message delivery from HTTP handler
         self.broadcast_queue: Queue = Queue()
         
@@ -82,8 +123,7 @@ class TashiServerNode:
             
             print(f"[{self.name}] Discovered peers: {peers}")
             
-            # Initialize Tashi node with a unique key
-            # Server is a non-voting observer - it just listens and relays
+            # Initialize Tashi node — server is a non-voting observer.
             self.tashi = TashiNode(
                 node_id=self.name,
                 bind_addr=f"127.0.0.1:{node_cfg['port']}",
@@ -108,7 +148,6 @@ class TashiServerNode:
     
     def _on_message_received(self, msg: str):
         """Handle messages from the Tashi swarm"""
-        print("Recieved broad..")
         try:
             data = json.loads(msg)
             message_type = data.get("type")
@@ -126,7 +165,6 @@ class TashiServerNode:
                     self._handle_reputation_update(data)
                     
         except json.JSONDecodeError:
-            # Legacy message handling
             if "Mission START" in msg:
                 print(f"[{self.name}] Supervisor event: {msg}")
         except Exception as e:
@@ -149,28 +187,44 @@ class TashiServerNode:
     def _handle_delivery_bid(self, data: Dict[str, Any]):
         """Track bids from drones"""
         request_id = data.get("request_id")
+        drone_id = data.get("drone_id")
         if request_id in self.active_requests:
             self.active_requests[request_id]["bids"].append(data)
-            print(f"[{self.name}] Bid received for {request_id}")
+            print(f"[{self.name}] Bid received for {request_id} from {drone_id}")
     
     def _handle_bid_awarded(self, data: Dict[str, Any]):
-        """Track bid awards"""
+        """Track bid awards and update drone state"""
         request_id = data.get("request_id")
+        awarded_drone = data.get("awarded_drone_id")
         if request_id in self.active_requests:
             self.active_requests[request_id]["status"] = "awarded"
-            self.active_requests[request_id]["awarded_drone"] = data.get("awarded_drone_id")
+            self.active_requests[request_id]["awarded_drone"] = awarded_drone
             self.active_requests[request_id]["final_price"] = data.get("final_price")
-            print(f"[{self.name}] Bid awarded for {request_id}")
+            print(f"[{self.name}] Bid awarded for {request_id} to {awarded_drone}")
+
+        # Mark the winning drone as busy
+        if awarded_drone and awarded_drone in self.drone_states:
+            self.drone_states[awarded_drone]["status"] = "busy"
+            self.drone_states[awarded_drone]["current_request"] = request_id
+            self.drone_states[awarded_drone]["last_seen"] = time.time()
     
     def _handle_delivery_confirmation(self, data: Dict[str, Any]):
-        """Track delivery completions"""
+        """Track delivery completions and restore drone to idle"""
         request_id = data.get("request_id")
+        drone_id = data.get("drone_id")
         if request_id in self.active_requests:
             request = self.active_requests.pop(request_id)
             request["status"] = "completed"
             request["completed_at"] = time.time()
             self.delivery_history.append(request)
+            _save_history(self.delivery_history)
             print(f"[{self.name}] Delivery completed: {request_id}")
+
+        # Restore drone to idle
+        if drone_id and drone_id in self.drone_states:
+            self.drone_states[drone_id]["status"] = "idle"
+            self.drone_states[drone_id]["current_request"] = None
+            self.drone_states[drone_id]["last_seen"] = time.time()
     
     def _handle_reputation_update(self, data: Dict[str, Any]):
         """Track reputation updates"""
@@ -181,17 +235,19 @@ class TashiServerNode:
                 "event_type": data.get("event_type"),
                 "impact": data.get("impact")
             }
+            # Also reflect in drone_states
+            if drone_id in self.drone_states:
+                self.drone_states[drone_id]["reputation"] = data.get("new_score", self.drone_states[drone_id].get("reputation", 100.0))
     
     def broadcast_delivery_request(self, request_data: Dict[str, Any]) -> bool:
         """Queue a delivery request for broadcasting to the swarm"""
-        # Ensure required fields
         if "request_id" not in request_data:
             request_data["request_id"] = f"req_{int(time.time() * 1000)}"
         
         if "bid_deadline" not in request_data:
-            request_data["bid_deadline"] = time.time() + 30
+            # 5 minutes — consistent with the HTTP handler deadline.
+            request_data["bid_deadline"] = time.time() + 300
         
-        # Validate locations
         if "pickup" not in request_data or "dropoff" not in request_data:
             print(f"[{self.name}] Missing pickup/dropoff locations")
             return False
@@ -201,7 +257,6 @@ class TashiServerNode:
             **request_data
         }
         
-        # Queue message for broadcast in main loop (thread-safe)
         self.broadcast_queue.put(message)
         print(f"[{self.name}] Queued delivery request: {request_data.get('request_id')}")
         return True
@@ -221,8 +276,7 @@ class TashiServerNode:
             }
     
     def run(self):
-        """Main control loop - initialize Tashi and process broadcasts each timestep"""
-        # Initialize Tashi connection in main thread (required for proper sync)
+        """Main control loop — initialize Tashi and process broadcasts each timestep"""
         self._init_tashi_connection()
         
         # Wait for Tashi to be ready
@@ -241,34 +295,29 @@ class TashiServerNode:
         
         # Main control loop
         while self.robot.step(self.timestep) != -1:
-            # Process any queued broadcast messages (from HTTP handler thread)
             if not self.broadcast_queue.empty():
                 try:
                     message = self.broadcast_queue.get_nowait()
                     if self.tashi and self.is_connected:
-                        print(message)
                         self.tashi.broadcast(json.dumps(message))
                         print(f"[{self.name}] Broadcast delivery request: {message.get('request_id')}")
                     else:
                         print(f"[{self.name}] Not connected to swarm, dropped message")
                 except Exception as e:
                     print(f"[{self.name}] Failed to process broadcast queue: {e}")
-            
-            # Keep robot simulation running
-            # All other work is handled by Tashi callbacks
 
 
 # Custom HTTP Request Handler
 class TashiServerHTTPHandler(BaseHTTPRequestHandler):
     """HTTP request handler for the Tashi Server API"""
     
-    # Class variable to reference the server instance
     server_instance: Optional['TashiServerNode'] = None
     
     def do_GET(self):
         """Handle GET requests"""
         parsed_url = urlparse(self.path)
         path = parsed_url.path
+        query = parse_qs(parsed_url.query)
         
         try:
             if path == '/api/status':
@@ -282,7 +331,7 @@ class TashiServerHTTPHandler(BaseHTTPRequestHandler):
                 self._send_json(response)
             elif path == '/api/drones':
                 with self.server_instance._state_lock:
-                    self._send_json(self.server_instance.drone_states)
+                    self._send_json(list(self.server_instance.drone_states.values()))
             elif path.startswith('/api/requests/'):
                 request_id = path.split('/')[-1]
                 with self.server_instance._state_lock:
@@ -295,9 +344,19 @@ class TashiServerHTTPHandler(BaseHTTPRequestHandler):
                 self._send_json(list_location_options())
             elif path == '/api/history':
                 with self.server_instance._state_lock:
+                    # Support pagination via ?page=N&limit=M
+                    limit = int(query.get("limit", ["20"])[0])
+                    page = int(query.get("page", ["1"])[0])
+                    history = self.server_instance.delivery_history
+                    total = len(history)
+                    start = (page - 1) * limit
+                    end = start + limit
                     response = {
-                        "history": self.server_instance.delivery_history[-20:],
-                        "total_completed": len(self.server_instance.delivery_history)
+                        "history": list(reversed(history))[start:end],
+                        "total_completed": total,
+                        "page": page,
+                        "limit": limit,
+                        "total_pages": max(1, (total + limit - 1) // limit),
                     }
                 self._send_json(response)
             elif path == '/api/reputation':
@@ -321,7 +380,6 @@ class TashiServerHTTPHandler(BaseHTTPRequestHandler):
         path = parsed_url.path
         
         try:
-            # Read request body
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length).decode('utf-8')
             data = json.loads(body) if body else {}
@@ -332,7 +390,6 @@ class TashiServerHTTPHandler(BaseHTTPRequestHandler):
         
         try:
             if path == '/api/requests':
-                # Submit delivery request
                 result = self._handle_create_request(data)
                 status = 201 if result.get("success") else (400 if "Missing" in result.get("error", "") else 500)
                 self._send_json(result, status)
@@ -344,13 +401,11 @@ class TashiServerHTTPHandler(BaseHTTPRequestHandler):
     
     def _handle_create_request(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Handle delivery request submission"""
-        # Validate required fields
         required_fields = ["customer_id", "package_weight"]
         missing = [field for field in required_fields if field not in data]
         if missing:
             return {"error": f"Missing fields: {missing}"}
         
-        # Validate locations
         try:
             payload = dict(data)
             if "pickup" in payload and isinstance(payload["pickup"], str):
@@ -363,14 +418,12 @@ class TashiServerHTTPHandler(BaseHTTPRequestHandler):
         if "pickup" not in payload or "dropoff" not in payload:
             return {"error": "Must specify pickup and dropoff locations"}
         
-        # Validate package weight
         if not isinstance(payload.get("package_weight"), (int, float)) or payload["package_weight"] <= 0:
             return {"error": "package_weight must be positive"}
         
         if "bid_deadline" not in payload:
             payload["bid_deadline"] = time.time() + 300
-        
-        # Broadcast to swarm
+
         success = self.server_instance.broadcast_delivery_request(payload)
         if success:
             return {
@@ -381,7 +434,7 @@ class TashiServerHTTPHandler(BaseHTTPRequestHandler):
         else:
             return {"error": "Failed to broadcast request"}
     
-    def _send_json(self, data: Dict[str, Any], status: int = 200):
+    def _send_json(self, data, status: int = 200):
         """Send JSON response"""
         response_body = json.dumps(data).encode('utf-8')
         
@@ -409,28 +462,23 @@ class TashiServerHTTPHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    # Create server node
     server = TashiServerNode()
     
-    # Set class variable for request handler
     TashiServerHTTPHandler.server_instance = server
     
-    # Create and start HTTP server in a separate thread (before main loop)
     http_server = HTTPServer(('0.0.0.0', 5000), TashiServerHTTPHandler)
     http_thread = threading.Thread(target=http_server.serve_forever, daemon=True)
     http_thread.start()
     
     print("[TashiServer] HTTP API started at http://0.0.0.0:5000")
     print("[TashiServer] Available endpoints:")
-    print("  GET  /api/status - Get marketplace status")
-    print("  GET  /api/requests - Get active requests")
-    print("  GET  /api/drones - Get tracked drone states")
-    print("  GET  /api/locations - Get predefined locations")
-    print("  POST /api/requests - Submit delivery request")
-    print("  GET  /api/history - Get delivery history")
+    print("  GET  /api/status     - Get marketplace status")
+    print("  GET  /api/requests   - Get active requests")
+    print("  GET  /api/drones     - Get tracked drone states (all 4 drones)")
+    print("  GET  /api/locations  - Get predefined locations")
+    print("  POST /api/requests   - Submit delivery request")
+    print("  GET  /api/history    - Get delivery history (persisted)")
     print("  GET  /api/reputation - Get reputation scores")
-    print("  GET  /health - Health check")
+    print("  GET  /health         - Health check")
     
-    # Run main controller loop (initializes Tashi and processes broadcasts)
     server.run()
-
