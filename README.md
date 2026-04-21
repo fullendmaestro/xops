@@ -24,13 +24,10 @@ A **Decentralized Drone Delivery Marketplace** built on the Tashi Vertex consens
 git clone https://github.com/fullendmaestro/xops
 cd xops
 ./setup.sh
-
-# 2. Setup XOPS extensions
-cd controllers/tashi_drone
-mkdir -p xops
+python utils/generate_config.py
 
 # 3. Install frontend dependencies
-cd ../web
+cd web
 bun install
 bun run dev
 ```
