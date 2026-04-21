@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono, DM_Sans } from "next/font/google"
 
 import "./globals.css"
+import { Providers } from "@/app/providers"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 
@@ -28,7 +29,9 @@ export default function RootLayout({
       )}
     >
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <Providers>
+          <ThemeProvider>{children}</ThemeProvider>
+        </Providers>
       </body>
     </html>
   )

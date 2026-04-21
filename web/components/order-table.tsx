@@ -4,10 +4,12 @@ import * as React from "react"
 import {
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type ColumnFiltersState,
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table"
@@ -163,6 +165,7 @@ export function OrderTable({ requests }: { requests: DeliveryRequest[] }) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: "request_id", desc: true },
   ])
@@ -171,34 +174,26 @@ export function OrderTable({ requests }: { requests: DeliveryRequest[] }) {
 
   const filteredRequests = React.useMemo(() => {
     let items = requests
-
     if (tab === "active") {
       items = items.filter(
-        (request) =>
-          !["delivered", "returning"].includes(request.status.toLowerCase())
+        (r) => !["delivered", "returning", "completed"].includes(r.status.toLowerCase()),
       )
     }
-
     if (tab === "delivered") {
       items = items.filter(
-        (request) => request.status.toLowerCase() === "delivered"
+        (r) => ["delivered", "completed"].includes(r.status.toLowerCase()),
       )
     }
-
-    if (!query.trim()) {
-      return items
-    }
-
+    if (!query.trim()) return items
     const search = query.trim().toLowerCase()
-    return items.filter((request) => {
-      return (
-        request.request_id.toLowerCase().includes(search) ||
-        request.customer_id.toLowerCase().includes(search) ||
-        request.pickup_location.toLowerCase().includes(search) ||
-        request.dropoff_location.toLowerCase().includes(search) ||
-        (request.assigned_drone ?? "").toLowerCase().includes(search)
-      )
-    })
+    return items.filter(
+      (r) =>
+        r.request_id.toLowerCase().includes(search) ||
+        r.customer_id.toLowerCase().includes(search) ||
+        r.pickup_location.toLowerCase().includes(search) ||
+        r.dropoff_location.toLowerCase().includes(search) ||
+        (r.assigned_drone ?? "").toLowerCase().includes(search),
+    )
   }, [query, requests, tab])
 
   const table = useReactTable({
@@ -207,13 +202,16 @@ export function OrderTable({ requests }: { requests: DeliveryRequest[] }) {
     state: {
       sorting,
       columnVisibility,
+      columnFilters,
       rowSelection,
     },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
   })

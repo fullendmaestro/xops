@@ -4,6 +4,7 @@ import {
   CircleDot,
   ClipboardList,
   Container,
+  History,
   LayoutDashboard,
   Package,
   ShieldCheck,
@@ -28,11 +29,12 @@ import {
 } from "@/components/ui/sidebar"
 
 const navigation = [
-  { label: "Dashboard", icon: LayoutDashboard },
-  { label: "Orders", icon: ClipboardList, badge: "12" },
-  { label: "Fleet", icon: Truck },
-  { label: "Bids", icon: CircleDot },
-  { label: "Reputation", icon: ShieldCheck },
+  { label: "Dashboard", icon: LayoutDashboard, tab: "overview" },
+  { label: "Orders", icon: ClipboardList, tab: "orders" },
+  { label: "History", icon: History, tab: "history" },
+  { label: "Fleet", icon: Truck, tab: "fleet" },
+  { label: "Bids", icon: CircleDot, tab: "signals" },
+  { label: "Reputation", icon: ShieldCheck, tab: "signals" },
 ]
 
 const secondaryNavigation = [
@@ -42,7 +44,17 @@ const secondaryNavigation = [
   { label: "Packages", icon: Package },
 ]
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  activeTab?: string
+  onTabChange?: (tab: string) => void
+  orderCount?: number
+}
+
+export function AppSidebar({
+  activeTab = "orders",
+  onTabChange,
+  orderCount,
+}: AppSidebarProps) {
   return (
     <Sidebar variant="inset" collapsible="icon">
       <SidebarHeader className="gap-3 border-b border-sidebar-border/70 p-4">
@@ -64,21 +76,22 @@ export function AppSidebar() {
           <SidebarGroupLabel>General</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navigation.map((item, index) => (
+              {navigation.map((item) => (
                 <SidebarMenuItem key={item.label}>
                   <SidebarMenuButton
-                    isActive={index === 0}
+                    isActive={activeTab === item.tab}
                     tooltip={item.label}
                     className="justify-start"
+                    onClick={() => onTabChange?.(item.tab)}
                   >
                     <item.icon />
                     <span>{item.label}</span>
-                    {item.badge && (
+                    {item.label === "Orders" && orderCount !== undefined && (
                       <Badge
                         variant="secondary"
                         className="ml-auto h-5 rounded-full px-1.5 text-[10px]"
                       >
-                        {item.badge}
+                        {orderCount}
                       </Badge>
                     )}
                   </SidebarMenuButton>
