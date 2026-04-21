@@ -1,5 +1,9 @@
 # XOPS: Decentralized Drone Delivery Marketplace
 
+<p align="center">
+   <img src="./xops.png" alt="XOPS logo" width="180" />
+</p>
+
 A **Decentralized Drone Delivery Marketplace** built on the Tashi Vertex consensus engine for the Vertex Swarm Challenge 2026. This system enables trustless, peer-to-peer drone delivery coordination without central servers.
 
 ## 🚀 Quick Start
@@ -26,7 +30,7 @@ cd controllers/tashi_drone
 mkdir -p xops
 
 # 3. Install frontend dependencies
-cd ../frontend
+cd ../web
 bun install
 bun run dev
 ```
@@ -37,14 +41,14 @@ bun run dev
 
    ```bash
    # Open Webots
-   # Load worlds/sample.wbt
+   # Load worlds/xops-city.wbt
    # Press Play
    ```
 
 2. **Start the Frontend:**
 
    ```bash
-   cd frontend
+   cd web
    bun run dev
    ```
 
@@ -66,11 +70,10 @@ bun run dev
 
 ### Key Features
 
-1. **Message Protocol**: JSON message types for marketplace operations
-2. **Delivery State Machine**: Manages drone lifecycle during deliveries
-3. **Marketplace Manager**: Handles bid calculation and coordination
-4. **Reputation System**: Tracks drone reliability and performance
-5. **Configuration System**: Drone capabilities for marketplace operations
+1. **Delivery State Machine**: Manages drone lifecycle during deliveries
+2. **Marketplace Manager**: Handles bid calculation and coordination
+3. **Reputation System**: Tracks drone reliability and performance
+4. **Configuration System**: Drone capabilities for marketplace operations
 
 ## 📁 Project Structure
 
@@ -154,31 +157,15 @@ The Next.js frontend provides:
 - **Marketplace Statistics**: View swarm availability and performance metrics
 - **Responsive Design**: Works on desktop and mobile devices
 
-## 🔍 Message Protocol
+## 📸 Demo Preview
 
-XOPS message protocol types:
+### Webots Swarm Simulation
 
-```json
-// Delivery Request
-{
-  "type": "delivery_request",
-  "request_id": "req_123",
-  "customer_id": "cust_456",
-  "pickup": {"x": 5.0, "y": 0.0, "z": 1.0},
-  "dropoff": {"x": -5.0, "y": 0.0, "z": 1.0},
-  "package_weight": 2.5,
-  "bid_deadline": 1640995200
-}
+![Webots swarm simulation](./xops-city.png)
 
-// Delivery Bid
-{
-  "type": "delivery_bid",
-  "drone_id": "Drone1",
-  "request_id": "req_123",
-  "bid_price": 15.50,
-  "eta_minutes": 12
-}
-```
+### XOPS Marketplace Dashboard
+
+![XOPS marketplace dashboard](./xops-dashboard.png)
 
 ## 🏆 Reputation System
 
