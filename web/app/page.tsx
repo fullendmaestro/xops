@@ -3,22 +3,22 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react"
 import {
   AlertCircle,
-  BarChart3,
-  Bell,
   ChevronRight,
   CircleDot,
   ClipboardList,
-  Container,
-  LayoutDashboard,
-  Package,
   Plus,
   Search,
   ShieldCheck,
   Truck,
-  Users,
-  Waypoints,
 } from "lucide-react"
 
+import type {
+  DeliveryRequest,
+  Drone,
+  LocationOption,
+} from "@/lib/models/dashboard"
+import { AppSidebar } from "@/components/app-sidebar"
+import { OrderTable } from "@/components/order-table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -30,12 +30,14 @@ import {
 } from "@/components/ui/card"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Field, FieldGroup } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -46,49 +48,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { TooltipProvider } from "@/components/ui/tooltip"
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
   SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarProvider,
-  SidebarSeparator,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TooltipProvider } from "@/components/ui/tooltip"
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
-
-interface LocationOption {
-  id: string
-  label: string
-  position: { x: number; y: number; z: number }
-}
-
-interface Drone {
-  id: string
-  name: string
-  status: string
-  battery_level: number
-  location: { x: number; y: number; z: number }
-}
-
-interface DeliveryRequest {
-  request_id: string
-  customer_id: string
-  status: string
-  pickup_location: string
-  dropoff_location: string
-  package_weight: number
-  assigned_drone: string | null
-}
 
 type RawRequest = {
   request_id?: string
@@ -109,21 +77,6 @@ type RawDrone = {
     base_location?: { x: number; y: number; z: number }
   }
 }
-
-const navigation = [
-  { label: "Dashboard", icon: LayoutDashboard },
-  { label: "Orders", icon: ClipboardList, badge: "12" },
-  { label: "Fleet", icon: Truck },
-  { label: "Bids", icon: CircleDot },
-  { label: "Reputation", icon: ShieldCheck },
-]
-
-const secondaryNavigation = [
-  { label: "Analytics", icon: BarChart3 },
-  { label: "Customers", icon: Users },
-  { label: "Waypoints", icon: Waypoints },
-  { label: "Packages", icon: Package },
-]
 
 const formatPosition = (position?: { x: number; y: number; z: number }) => {
   if (!position) return "Unknown"
@@ -176,38 +129,6 @@ const normalizeDrones = (payload: unknown): Drone[] => {
       location: drone.capabilities?.base_location ?? { x: 0, y: 0, z: 0 },
     })
   )
-}
-
-function OrderStatusBadge({ status }: { status: string }) {
-  const normalizedStatus = status.toLowerCase()
-
-  switch (normalizedStatus) {
-    case "delivered":
-      return (
-        <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-          Delivered
-        </Badge>
-      )
-    case "assigned":
-    case "navigating_pickup":
-    case "at_pickup":
-    case "carrying":
-    case "navigating_dropoff":
-    case "awarded":
-      return (
-        <Badge className="bg-sky-500/10 text-sky-700 dark:text-sky-300">
-          In progress
-        </Badge>
-      )
-    case "returning":
-      return (
-        <Badge className="bg-violet-500/10 text-violet-700 dark:text-violet-300">
-          Returning
-        </Badge>
-      )
-    default:
-      return <Badge variant="outline">Pending</Badge>
-  }
 }
 
 function StatCard({
@@ -367,90 +288,10 @@ export default function Home() {
     }
   }, [drones, requests])
 
-  const recentRequests = requests.slice(0, 5)
-  const fleetRows = drones.slice(0, 4)
-
   return (
     <TooltipProvider>
       <SidebarProvider>
-        <Sidebar variant="inset" collapsible="icon">
-          <SidebarHeader className="gap-3 border-b border-sidebar-border/70 p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
-                <Container className="size-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold">XOPS</div>
-                <div className="truncate text-xs text-sidebar-foreground/70">
-                  Drone delivery control plane
-                </div>
-              </div>
-            </div>
-          </SidebarHeader>
-
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>General</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {navigation.map((item, index) => (
-                    <SidebarMenuItem key={item.label}>
-                      <SidebarMenuButton
-                        isActive={index === 0}
-                        tooltip={item.label}
-                        className="justify-start"
-                      >
-                        <item.icon />
-                        <span>{item.label}</span>
-                        {item.badge && (
-                          <Badge
-                            variant="secondary"
-                            className="ml-auto h-5 rounded-full px-1.5 text-[10px]"
-                          >
-                            {item.badge}
-                          </Badge>
-                        )}
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-
-            <SidebarSeparator />
-
-            <SidebarGroup>
-              <SidebarGroupLabel>Operations</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {secondaryNavigation.map((item) => (
-                    <SidebarMenuItem key={item.label}>
-                      <SidebarMenuButton
-                        tooltip={item.label}
-                        className="justify-start"
-                      >
-                        <item.icon />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-
-          <SidebarFooter className="mt-auto border-t border-sidebar-border/70 p-4">
-            <div className="flex items-center justify-between rounded-xl border border-sidebar-border bg-sidebar-accent/50 px-3 py-2">
-              <div>
-                <div className="text-sm font-medium">Swarm online</div>
-                <div className="text-xs text-sidebar-foreground/70">
-                  Live request sync enabled
-                </div>
-              </div>
-              <Bell className="size-4 text-sidebar-foreground/70" />
-            </div>
-          </SidebarFooter>
-        </Sidebar>
+        <AppSidebar />
 
         <SidebarInset className="bg-[radial-gradient(circle_at_top_left,rgba(0,0,0,0.04),transparent_28%),linear-gradient(to_bottom,rgba(255,255,255,0.85),rgba(255,255,255,1))] dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.05),transparent_28%),linear-gradient(to_bottom,rgba(2,6,23,0.98),rgba(2,6,23,1))]">
           <Tabs defaultValue="orders" className="flex min-h-screen flex-col">
@@ -499,51 +340,7 @@ export default function Home() {
 
               <main className="flex-1 px-4 py-6 md:px-6 lg:px-8">
                 <TabsContent value="orders" className="mt-0">
-                  <Card className="border-border/70 shadow-sm">
-                    <CardHeader className="border-b border-border/70 pb-4">
-                      <CardTitle>Order board</CardTitle>
-                      <CardDescription>
-                        Static order list layout for dashboard presentation.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3 p-4">
-                      {recentRequests.length === 0 ? (
-                        <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                          No active requests.
-                        </div>
-                      ) : (
-                        recentRequests.map((request) => (
-                          <div
-                            key={request.request_id}
-                            className="rounded-xl border bg-background p-4"
-                          >
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <div className="font-mono text-xs text-muted-foreground">
-                                    {request.request_id.slice(0, 10)}
-                                  </div>
-                                  <OrderStatusBadge status={request.status} />
-                                </div>
-                                <div className="text-sm font-medium">
-                                  Customer {request.customer_id}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  Pickup {request.pickup_location} · Dropoff{" "}
-                                  {request.dropoff_location}
-                                </div>
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {request.assigned_drone
-                                  ? `Assigned to ${request.assigned_drone}`
-                                  : "Awaiting assignment"}
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
+                  <OrderTable requests={requests} />
                 </TabsContent>
 
                 <TabsContent value="overview" className="mt-0 space-y-6">
@@ -635,80 +432,44 @@ export default function Home() {
                       </CardContent>
                     </Card>
 
-                    <div className="space-y-6 xl:col-span-2">
-                      <Card className="border-border/70 shadow-sm">
-                        <CardHeader className="border-b border-border/70 pb-4">
-                          <CardTitle>Fleet snapshot</CardTitle>
-                          <CardDescription>
-                            Static sidebar-style list for the current swarm.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3 p-4">
-                          {fleetRows.length === 0 ? (
-                            <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                              No drones available.
-                            </div>
-                          ) : (
-                            fleetRows.map((drone) => (
-                              <div
-                                key={drone.id}
-                                className="flex items-center justify-between rounded-xl border bg-background p-3"
-                              >
-                                <div className="flex min-w-0 items-center gap-3">
-                                  <div className="rounded-lg bg-muted p-2">
-                                    <Truck className="size-4" />
+                    <Card className="border-border/70 shadow-sm xl:col-span-2">
+                      <CardHeader className="border-b border-border/70 pb-4">
+                        <CardTitle>Fleet snapshot</CardTitle>
+                        <CardDescription>
+                          Static sidebar-style list for the current swarm.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3 p-4">
+                        {drones.length === 0 ? (
+                          <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                            No drones available.
+                          </div>
+                        ) : (
+                          drones.slice(0, 4).map((drone) => (
+                            <div
+                              key={drone.id}
+                              className="flex items-center justify-between rounded-xl border bg-background p-3"
+                            >
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div className="rounded-lg bg-muted p-2">
+                                  <Truck className="size-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium">
+                                    {drone.name}
                                   </div>
-                                  <div className="min-w-0">
-                                    <div className="truncate text-sm font-medium">
-                                      {drone.name}
-                                    </div>
-                                    <div className="truncate text-xs text-muted-foreground">
-                                      Battery {drone.battery_level}% ·{" "}
-                                      {formatPosition(drone.location)}
-                                    </div>
+                                  <div className="truncate text-xs text-muted-foreground">
+                                    Battery {drone.battery_level}% ·{" "}
+                                    {formatPosition(drone.location)}
                                   </div>
                                 </div>
-                                <Badge variant="outline">Ready</Badge>
                               </div>
-                            ))
-                          )}
-                        </CardContent>
-                      </Card>
-
-                      <Card className="border-border/70 shadow-sm">
-                        <CardHeader className="border-b border-border/70 pb-4">
-                          <CardTitle>Current signals</CardTitle>
-                          <CardDescription>
-                            Placeholder operational signals without additional
-                            interactions.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3 p-4">
-                          <div className="flex items-center justify-between rounded-xl border bg-background p-3">
-                            <div>
-                              <div className="text-sm font-medium">
-                                Reputation drift
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                Tracking bid accuracy and runtime reliability
-                              </div>
+                              <Badge variant="outline">Ready</Badge>
                             </div>
-                            <Badge variant="secondary">Healthy</Badge>
-                          </div>
-                          <div className="flex items-center justify-between rounded-xl border bg-background p-3">
-                            <div>
-                              <div className="text-sm font-medium">
-                                Bid queue
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                Awaiting auction settlement updates
-                              </div>
-                            </div>
-                            <Badge variant="outline">Idle</Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
+                          ))
+                        )}
+                      </CardContent>
+                    </Card>
                   </section>
                 </TabsContent>
 
@@ -782,84 +543,85 @@ export default function Home() {
 
           <Dialog open={isCreateOrderOpen} onOpenChange={setIsCreateOrderOpen}>
             <DialogContent className="sm:max-w-xl">
-              <DialogHeader>
-                <DialogTitle>Create order</DialogTitle>
-                <DialogDescription>
-                  Open a new delivery request from the dashboard shell.
-                </DialogDescription>
-              </DialogHeader>
+              <form onSubmit={handleSubmit}>
+                <DialogHeader>
+                  <DialogTitle>Create order</DialogTitle>
+                  <DialogDescription>
+                    Where should the drone pick up and deliver?
+                  </DialogDescription>
+                </DialogHeader>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="customer-id">Customer ID</Label>
-                  <Input
-                    id="customer-id"
-                    value={customerId}
-                    onChange={(event) => setCustomerId(event.target.value)}
-                    placeholder="cust_001"
-                  />
-                </div>
+                <FieldGroup className="mt-4">
+                  <Field>
+                    <Label htmlFor="customer-id">Customer ID</Label>
+                    <Input
+                      id="customer-id"
+                      value={customerId}
+                      onChange={(event) => setCustomerId(event.target.value)}
+                      placeholder="cust_001"
+                    />
+                  </Field>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="pickup-location">Pickup</Label>
-                    <Select value={pickupId} onValueChange={setPickupId}>
-                      <SelectTrigger id="pickup-location" className="w-full">
-                        <SelectValue placeholder="Select pickup location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {pickupOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.id}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <FieldGroup className="grid grid-cols-2">
+                    <Field>
+                      <Label htmlFor="pickup-location">Pickup location</Label>
+                      <Select value={pickupId} onValueChange={setPickupId}>
+                        <SelectTrigger id="pickup-location" className="w-full">
+                          <SelectValue placeholder="Select pickup" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {pickupOptions.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="dropoff-location">Dropoff</Label>
-                    <Select value={dropoffId} onValueChange={setDropoffId}>
-                      <SelectTrigger id="dropoff-location" className="w-full">
-                        <SelectValue placeholder="Select dropoff location" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {dropoffOptions.map((option) => (
-                          <SelectItem key={option.id} value={option.id}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                    <Field>
+                      <Label htmlFor="dropoff-location">Dropoff location</Label>
+                      <Select value={dropoffId} onValueChange={setDropoffId}>
+                        <SelectTrigger id="dropoff-location" className="w-full">
+                          <SelectValue placeholder="Select dropoff" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {dropoffOptions.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                  </FieldGroup>
 
-                <div className="space-y-2">
-                  <Label htmlFor="package-weight">Package weight</Label>
-                  <Input
-                    id="package-weight"
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    value={weight}
-                    onChange={(event) => setWeight(event.target.value)}
-                    placeholder="1.0"
-                  />
-                </div>
+                  <Field>
+                    <Label htmlFor="package-weight">Package weight (kg)</Label>
+                    <Input
+                      id="package-weight"
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      value={weight}
+                      onChange={(event) => setWeight(event.target.value)}
+                      placeholder="1.0"
+                    />
+                  </Field>
+                </FieldGroup>
 
                 {error && (
-                  <div className="flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                  <div className="mt-4 flex gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                     <AlertCircle className="size-4 shrink-0" />
                     <span>{error}</span>
                   </div>
                 )}
 
-                <DialogFooter>
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full sm:w-auto"
-                  >
+                <DialogFooter className="mt-4">
+                  <DialogClose asChild>
+                    <Button variant="outline">Cancel</Button>
+                  </DialogClose>
+                  <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Creating..." : "Create order"}
                   </Button>
                 </DialogFooter>
