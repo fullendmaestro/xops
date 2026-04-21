@@ -40,7 +40,7 @@ function formatPos(pos?: { x: number; y: number; z: number }) {
   return `${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}`
 }
 
-function normalizeRequest(
+export function normalizeRequest(
   requestId: string,
   raw: MarketplaceRequest,
 ): DeliveryRequestView {

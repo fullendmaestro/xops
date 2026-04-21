@@ -7,7 +7,7 @@ import {
   Search,
 } from "lucide-react"
 
-import { useRequests, useDrones } from "@/lib/api/requests"
+import { useRequests, useDrones, useOrderHistory, normalizeRequest } from "@/lib/api/requests"
 import { AppSidebar } from "@/components/app-sidebar"
 import { CreateOrderDialog } from "@/components/create-order-dialog"
 import { FleetPanel } from "@/components/fleet-panel"
@@ -37,6 +37,13 @@ export default function Home() {
 
   const { data: requests = [] } = useRequests()
   const { data: drones = [] } = useDrones()
+  const { data: historyRes } = useOrderHistory(1, 50)
+
+  // Merge active requests with recent history so completed orders still appear in the Orders table
+  const allRequests = [
+    ...requests,
+    ...(historyRes?.history.map((req) => normalizeRequest(req.request_id, req)) ?? []),
+  ]
 
   const tabLabel: Record<string, string> = {
     orders: "Orders",
@@ -110,7 +117,7 @@ export default function Home() {
               <main className="flex-1 px-4 py-6 md:px-6 lg:px-8">
                 {/* ── Orders ── */}
                 <TabsContent value="orders" className="mt-0">
-                  <OrderTable requests={requests} />
+                  <OrderTable requests={allRequests} />
                 </TabsContent>
 
                 {/* ── Overview ── */}

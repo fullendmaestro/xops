@@ -20,6 +20,7 @@ import {
   ChevronsLeftIcon,
   ChevronsRightIcon,
   Columns3Icon,
+  CheckCircle2,
 } from "lucide-react"
 
 import type { DeliveryRequest } from "@/lib/models/dashboard"
@@ -56,9 +57,11 @@ function OrderStatusBadge({ status }: { status: string }) {
   const normalizedStatus = status.toLowerCase()
 
   switch (normalizedStatus) {
+    case "completed":
     case "delivered":
       return (
         <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 className="mr-1 size-3" />
           Delivered
         </Badge>
       )
