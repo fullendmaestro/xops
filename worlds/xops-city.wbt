@@ -46,6 +46,30 @@ Floor {
   }
 }
 
+# Keep buildings at the perimeter so mission pads stay in the central open corridor.
+SmallManor {
+  translation -24.0 -20.0 0
+  rotation 0 0 1 0.9
+}
+
+SmallManor {
+  translation -23.0 22.0 0
+  rotation 0 0 1 -0.6
+  name "small manor(1)"
+}
+
+SmallManor {
+  translation 22.0 21.0 0
+  rotation 0 0 1 1.6
+  name "small manor(2)"
+}
+
+SmallManor {
+  translation 24.0 -18.0 0
+  rotation 0 0 1 2.25
+  name "small manor(3)"
+}
+
 
 DEF PAD_PICKUP_ALPHA SquareManhole {
   translation -8.0 6.0 -0.03
